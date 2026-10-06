@@ -105,7 +105,7 @@ Run the automated script which installs dependencies, runs Expo prebuild with th
 2. **Generate the native Android project via Expo Prebuild:**
    The custom plugin [`plugins/withUsagePermissions.js`](./plugins/withUsagePermissions.js) automatically injects required permissions (`PACKAGE_USAGE_STATS`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `FOREGROUND_SERVICE`, `RECEIVE_BOOT_COMPLETED`) into `AndroidManifest.xml`:
    ```bash
-   npx expo prebuild --platform android --clean
+   npx expo prebuild --platform android --no-install
    ```
 
 3. **Compile the Debug APK:**
