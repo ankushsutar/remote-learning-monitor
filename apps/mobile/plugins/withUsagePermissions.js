@@ -84,29 +84,6 @@ module.exports = function withUsagePermissions(config) {
       }
     });
 
-    // 3. Ensure Application element has proper WorkManager service & receiver declarations
-    if (Array.isArray(androidManifest.application) && androidManifest.application.length > 0) {
-      const application = androidManifest.application[0];
-      if (!application.receiver) {
-        application.receiver = [];
-      }
-
-      // Add boot receiver for persistent WorkManager restart
-      const bootReceiverName = 'androidx.work.impl.diagnostics.DiagnosticsReceiver';
-      const hasReceiver = application.receiver.some(
-        (r) => r.$ && r.$['android:name'] === bootReceiverName
-      );
-      if (!hasReceiver) {
-        application.receiver.push({
-          $: {
-            'android:name': bootReceiverName,
-            'android:permission': 'android.permission.DUMP',
-            'android:exported': 'false',
-          },
-        });
-      }
-    }
-
     return config;
   });
 };

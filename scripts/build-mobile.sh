@@ -62,11 +62,9 @@ fi
 
 # 3. Generate Android Native Project via Expo Prebuild
 echo -e "${BLUE}[STEP 3/5] Generating Native Android Project with Config Plugin...${NC}"
-echo -e "${CYAN}Running 'npx expo prebuild --platform android --clean' to apply withUsagePermissions plugin...${NC}"
+echo -e "${CYAN}Running 'npx expo prebuild --platform android --clean --no-install' to apply withUsagePermissions plugin...${NC}"
 
-npx expo prebuild --platform android --clean || {
-    echo -e "${YELLOW}[NOTE] If expo CLI prompt appears, run in non-interactive terminal or ensure project is committed.${NC}"
-}
+CI=1 npx expo prebuild --platform android --clean --no-install
 
 # 4. Compile Android APK via Gradle
 echo -e "${BLUE}[STEP 4/5] Compiling Android Gradle Build (API 34 target)...${NC}"

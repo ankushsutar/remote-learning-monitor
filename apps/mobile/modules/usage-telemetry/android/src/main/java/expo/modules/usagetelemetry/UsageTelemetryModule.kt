@@ -64,7 +64,6 @@ class UsageTelemetryModule : Module() {
         }
 
         // 4. Request exemption from battery optimizations
-        @SuppressLint("BatteryLife")
         Function("requestIgnoreBatteryOptimization") {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:${context.packageName}")
@@ -79,51 +78,49 @@ class UsageTelemetryModule : Module() {
 
         // 5. Query exact interval usage telemetry using EventIntervalCalculator & NetworkStatsHelper
         AsyncFunction("collectIntervalTelemetry") { startTime: Double, endTime: Double ->
-            withContext(Dispatchers.IO) {
-                val startMillis = startTime.toLong()
-                val endMillis = endTime.toLong()
+            val startMillis = startTime.toLong()
+            val endMillis = endTime.toLong()
 
-                if (!hasUsageStatsPermission()) {
-                    Log.w(tag, "Cannot collect telemetry: UsageStats permission not granted.")
-                    return@withContext emptyList<AppTelemetryRecord>()
-                }
-
-                if (endMillis <= startMillis) {
-                    Log.w(tag, "Invalid interval: endTime ($endMillis) must be greater than startTime ($startMillis).")
-                    return@withContext emptyList<AppTelemetryRecord>()
-                }
-
-                val eventCalculator = EventIntervalCalculator(context)
-                val networkStatsHelper = NetworkStatsHelper(context)
-
-                val foregroundDurations = eventCalculator.calculateForegroundDurations(startMillis, endMillis)
-                val records = mutableListOf<AppTelemetryRecord>()
-
-                for ((pkg, durationSec) in foregroundDurations) {
-                    // Filter system noise / empty durations
-                    if (durationSec <= 0L && pkg.contains("launcher")) continue
-
-                    val uid = networkStatsHelper.getUidForPackage(pkg)
-                    val networkDelta = if (uid != null) {
-                        networkStatsHelper.getNetworkUsageForUid(uid, startMillis, endMillis)
-                    } else {
-                        NetworkStatsHelper.NetworkDelta(0L, 0L)
-                    }
-
-                    records.add(
-                        AppTelemetryRecord(
-                            packageName = pkg,
-                            startTime = startMillis,
-                            endTime = endMillis,
-                            foregroundDurationSec = durationSec,
-                            bytesRx = networkDelta.rxBytes,
-                            bytesTx = networkDelta.txBytes
-                        )
-                    )
-                }
-
-                records.sortedByDescending { it.foregroundDurationSec }
+            if (!hasUsageStatsPermission()) {
+                Log.w(tag, "Cannot collect telemetry: UsageStats permission not granted.")
+                return@AsyncFunction emptyList<AppTelemetryRecord>()
             }
+
+            if (endMillis <= startMillis) {
+                Log.w(tag, "Invalid interval: endTime ($endMillis) must be greater than startTime ($startMillis).")
+                return@AsyncFunction emptyList<AppTelemetryRecord>()
+            }
+
+            val eventCalculator = EventIntervalCalculator(context)
+            val networkStatsHelper = NetworkStatsHelper(context)
+
+            val foregroundDurations = eventCalculator.calculateForegroundDurations(startMillis, endMillis)
+            val records = mutableListOf<AppTelemetryRecord>()
+
+            for ((pkg, durationSec) in foregroundDurations) {
+                // Filter system noise / empty durations
+                if (durationSec <= 0L && pkg.contains("launcher")) continue
+
+                val uid = networkStatsHelper.getUidForPackage(pkg)
+                val networkDelta = if (uid != null) {
+                    networkStatsHelper.getNetworkUsageForUid(uid, startMillis, endMillis)
+                } else {
+                    NetworkStatsHelper.NetworkDelta(0L, 0L)
+                }
+
+                records.add(
+                    AppTelemetryRecord(
+                        packageName = pkg,
+                        startTime = startMillis,
+                        endTime = endMillis,
+                        foregroundDurationSec = durationSec,
+                        bytesRx = networkDelta.rxBytes,
+                        bytesTx = networkDelta.txBytes
+                    )
+                )
+            }
+
+            records.sortedByDescending { it.foregroundDurationSec }
         }
 
         // 6. Configure parameters for background WorkManager sync
