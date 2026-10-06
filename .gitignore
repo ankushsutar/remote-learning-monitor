@@ -8,8 +8,8 @@ dist/
 build/
 .next/
 out/
-android/app/build/
-android/.gradle/
+apps/mobile/android/
+android/
 *.apk
 *.aab
 
