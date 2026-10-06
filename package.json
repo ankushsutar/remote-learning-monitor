@@ -11,6 +11,8 @@
     "backend:dev": "npm --prefix services/backend run dev",
     "dashboard:dev": "npm --prefix apps/dashboard run dev",
     "mobile:start": "npm --prefix apps/mobile run start",
+    "mobile:dev": "./scripts/mobile-dev.sh",
+    "mobile:build": "./scripts/build-mobile.sh",
     "seed": "npm --prefix services/backend run seed"
   }
 }

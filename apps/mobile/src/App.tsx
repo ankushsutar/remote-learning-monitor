@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { registerRootComponent } from 'expo';
 import {
   SafeAreaView,
   ScrollView,
@@ -337,3 +338,6 @@ const styles = StyleSheet.create({
     fontSize: 13
   }
 });
+
+registerRootComponent(App);
+

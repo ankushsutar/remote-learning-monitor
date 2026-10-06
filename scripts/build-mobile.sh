@@ -69,6 +69,10 @@ CI=1 npx expo prebuild --platform android --no-install
 # 4. Compile Android APK via Gradle
 echo -e "${BLUE}[STEP 4/5] Compiling Android Gradle Build (API 34 target)...${NC}"
 if [ -d "$MOBILE_DIR/android" ]; then
+    echo -e "${CYAN}Packaging JavaScript bundle into native assets...${NC}"
+    mkdir -p "$MOBILE_DIR/android/app/src/main/assets"
+    npx expo export:embed --platform android --dev false --entry-file index.js --bundle-output "$MOBILE_DIR/android/app/src/main/assets/index.android.bundle" --assets-dest "$MOBILE_DIR/android/app/src/main/res"
+
     cd "$MOBILE_DIR/android"
     if [ -f "./gradlew" ]; then
         chmod +x ./gradlew
