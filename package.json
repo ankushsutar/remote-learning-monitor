@@ -1,0 +1,16 @@
+{
+  "name": "student-telemetry-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "apps/mobile/modules/*",
+    "services/*"
+  ],
+  "scripts": {
+    "backend:dev": "npm --prefix services/backend run dev",
+    "dashboard:dev": "npm --prefix apps/dashboard run dev",
+    "mobile:start": "npm --prefix apps/mobile run start",
+    "seed": "npm --prefix services/backend run seed"
+  }
+}

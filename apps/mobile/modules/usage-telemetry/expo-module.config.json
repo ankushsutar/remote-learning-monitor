@@ -1,0 +1,10 @@
+{
+  "name": "usage-telemetry",
+  "platforms": ["android"],
+  "android": {
+    "package": "expo.modules.usagetelemetry",
+    "modules": [
+      "expo.modules.usagetelemetry.UsageTelemetryModule"
+    ]
+  }
+}

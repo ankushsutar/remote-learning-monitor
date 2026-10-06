@@ -1,0 +1,23 @@
+{
+  "name": "usage-telemetry",
+  "version": "1.0.0",
+  "description": "Production-grade Android usage stats and network telemetry Expo native module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "build": "expo-module build"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "android",
+    "usage-stats",
+    "network-stats",
+    "telemetry"
+  ],
+  "author": "Antigravity Systems Architecture Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "expo": "*"
+  }
+}
