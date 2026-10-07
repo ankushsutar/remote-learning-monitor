@@ -9,6 +9,8 @@ declare module 'react-native' {
   export const FlatList: any;
   export const ActivityIndicator: any;
   export const StatusBar: any;
+  export const Alert: any;
+  export const Modal: any;
   export const Platform: { OS: 'ios' | 'android' | 'web' };
 }
 
