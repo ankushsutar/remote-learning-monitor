@@ -18,6 +18,7 @@ interface NativeUsageTelemetryModule {
   configureSyncWorker(backendUrl: string, deviceToken: string, deviceId: string): void;
   startBackgroundSync(): void;
   stopBackgroundSync(): void;
+  openAppSettings(): void;
 }
 
 // Fallback for non-Android environments or development testing
@@ -117,9 +118,14 @@ export function stopBackgroundSync(): void {
   NativeModule.stopBackgroundSync();
 }
 
+export function openAppSettings(): void {
+  NativeModule.openAppSettings();
+}
+
 export default {
   hasUsagePermission,
   requestUsagePermission,
+  openAppSettings,
   isBatteryOptimizationIgnored,
   requestIgnoreBatteryOptimization,
   collectIntervalTelemetry,

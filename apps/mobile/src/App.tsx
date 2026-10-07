@@ -40,6 +40,7 @@ export default function App() {
     queuedRecords,
     lastSyncResult,
     requestUsagePermission,
+    openAppSettings,
     requestBatteryOpt,
     collectAndEnqueue,
     triggerSync,
@@ -143,6 +144,17 @@ export default function App() {
             onRequest={requestBatteryOpt}
             requiredText="Exempt Needed"
           />
+          {!hasUsagePermission && (
+            <TouchableOpacity
+              style={styles.restrictedSettingsHint}
+              onPress={openAppSettings}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.restrictedSettingsText}>
+                ⚠️ On Android 13/14, if it says "Restricted setting": Tap here to open App Info &rarr; Tap (⋮) in top right &rarr; "Allow restricted settings".
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Local Buffer Status */}
@@ -336,6 +348,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13
+  },
+  restrictedSettingsHint: {
+    marginTop: 12,
+    backgroundColor: 'rgba(234, 179, 8, 0.1)',
+    borderColor: '#EAB308',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10
+  },
+  restrictedSettingsText: {
+    color: '#FDE047',
+    fontSize: 12,
+    lineHeight: 17
   }
 });
 

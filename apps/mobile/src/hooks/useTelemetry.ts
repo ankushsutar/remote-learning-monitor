@@ -140,6 +140,7 @@ export function useTelemetry(
     ...state,
     refreshStatus,
     requestUsagePermission,
+    openAppSettings: UsageTelemetry.openAppSettings,
     requestBatteryOpt,
     collectAndEnqueue,
     triggerSync,

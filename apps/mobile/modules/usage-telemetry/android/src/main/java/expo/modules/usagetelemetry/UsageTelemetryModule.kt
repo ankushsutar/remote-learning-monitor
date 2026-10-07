@@ -39,20 +39,35 @@ class UsageTelemetryModule : Module() {
 
         // 2. Request Usage Access via Android Settings Activity
         Function("requestUsagePermission") {
-            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                data = Uri.fromParts("package", context.packageName, null)
-            }
-
-            // Fallback without URI if manufacturer does not support targeted usage settings
             try {
-                context.startActivity(intent)
-            } catch (e: Exception) {
-                Log.w(tag, "Failed to launch package-specific usage settings. Opening generic settings.", e)
-                val fallbackIntent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
-                context.startActivity(fallbackIntent)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(tag, "Failed to launch usage settings intent, opening app details fallback", e)
+                try {
+                    val appSettingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(appSettingsIntent)
+                } catch (e2: Exception) {
+                    Log.e(tag, "Failed to launch fallback app details settings", e2)
+                }
+            }
+        }
+
+        // Open App Info settings (used for Android 13/14 'Allow restricted settings')
+        Function("openAppSettings") {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    data = Uri.fromParts("package", context.packageName, null)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to open app settings", e)
             }
         }
 
