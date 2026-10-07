@@ -88,12 +88,14 @@ To run the automated verification test suite:
 3. **Android Studio & SDK** targeting API 34 (`Android 14+`).
 4. **Android device or emulator** connected via ADB.
 
-### Option A: Automated Build Script
-Run the automated script which installs dependencies, runs Expo prebuild with the custom config plugin, and builds the Gradle APK:
+### Option A: Automated Build Script (Recommended)
+Run the automated script which bundles JavaScript assets, applies the custom native plugin, and exports the APK directly to the root `release/` directory:
 
 ```bash
 ./scripts/build-mobile.sh
 ```
+The compiled APK will immediately be available at:
+`release/student-telemetry-client.apk` (and `release/app-debug.apk`)
 
 ### Option B: Step-by-Step Manual Build
 1. **Navigate to the mobile directory:**
@@ -108,7 +110,13 @@ Run the automated script which installs dependencies, runs Expo prebuild with th
    npx expo prebuild --platform android --no-install
    ```
 
-3. **Compile the Debug APK:**
+3. **Pre-bundle JavaScript Assets:**
+   ```bash
+   mkdir -p android/app/src/main/assets
+   npx expo export:embed --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+   ```
+
+4. **Compile the Debug APK:**
    ```bash
    cd android
    ./gradlew assembleDebug
@@ -116,8 +124,10 @@ Run the automated script which installs dependencies, runs Expo prebuild with th
    The compiled APK is located at:
    `android/app/build/outputs/apk/debug/app-debug.apk`
 
-4. **Install onto your connected device or emulator:**
+5. **Install onto your connected device or emulator:**
    ```bash
+   adb install -r ../../release/student-telemetry-client.apk
+   # or
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 

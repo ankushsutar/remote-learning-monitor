@@ -10,6 +10,7 @@ set -eo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MOBILE_DIR="$ROOT_DIR/apps/mobile"
+RELEASE_DIR="$ROOT_DIR/release"
 
 # Load Centralized .env
 ENV_FILE="$ROOT_DIR/.env"
@@ -83,7 +84,23 @@ if [ -d "$MOBILE_DIR/android" ]; then
         }
         APK_PATH="$MOBILE_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
         if [ -f "$APK_PATH" ]; then
-            echo -e "${GREEN}${BOLD}[SUCCESS] APK generated at:${NC} $APK_PATH"
+            echo -e "${GREEN}${BOLD}[SUCCESS] Gradle APK compiled successfully!${NC}"
+            
+            # Copy to dedicated release directory
+            mkdir -p "$RELEASE_DIR"
+            RELEASE_APK="$RELEASE_DIR/student-telemetry-client.apk"
+            cp "$APK_PATH" "$RELEASE_APK"
+            cp "$APK_PATH" "$RELEASE_DIR/app-debug.apk"
+            
+            echo ""
+            echo -e "${GREEN}${BOLD}==========================================================================${NC}"
+            echo -e "${GREEN}${BOLD}     [RELEASE READY] APK EXPORTED TO SEPARATE RELEASE FOLDER:             ${NC}"
+            echo -e "${GREEN}${BOLD}==========================================================================${NC}"
+            echo -e "  📂 Release Directory: ${BOLD}$RELEASE_DIR${NC}"
+            echo -e "  📦 Primary APK:       ${CYAN}${BOLD}$RELEASE_APK${NC}"
+            echo -e "  📦 Standard APK:      ${CYAN}${BOLD}$RELEASE_DIR/app-debug.apk${NC}"
+            echo -e "${GREEN}${BOLD}==========================================================================${NC}"
+            echo ""
         fi
     fi
 else
@@ -93,14 +110,15 @@ fi
 
 # 5. Check ADB & Connected Devices
 echo -e "${BLUE}[STEP 5/5] Checking Connected Android Devices / Emulators...${NC}"
+TARGET_INSTALL_APK="${RELEASE_APK:-$APK_PATH}"
 if command -v adb &> /dev/null; then
     DEVICES=$(adb devices | grep -v "List of devices" | grep "device$" || true)
     if [ -n "$DEVICES" ]; then
         echo -e "${GREEN}[OK] Detected active Android device(s):${NC}"
         echo "$DEVICES"
-        if [ -f "$APK_PATH" ]; then
-            echo -e "${CYAN}Installing APK onto device...${NC}"
-            adb install -r "$APK_PATH"
+        if [ -n "$TARGET_INSTALL_APK" ] && [ -f "$TARGET_INSTALL_APK" ]; then
+            echo -e "${CYAN}Installing APK onto device from release folder...${NC}"
+            adb install -r "$TARGET_INSTALL_APK"
             echo -e "${GREEN}[SUCCESS] Installed Student Telemetry Client on connected device!${NC}"
             echo -e "${CYAN}Launching application...${NC}"
             adb shell am start -n com.telemetry.studentmonitor/com.telemetry.studentmonitor.MainActivity || true
@@ -108,7 +126,7 @@ if command -v adb &> /dev/null; then
     else
         echo -e "${YELLOW}[INFO] No connected physical device or emulator found via adb.${NC}"
         echo -e "       Launch an emulator with: ${BOLD}emulator -avd <emulator_name>${NC}"
-        echo -e "       Then install with: ${BOLD}adb install -r $APK_PATH${NC}"
+        echo -e "       Then install with: ${BOLD}adb install -r $TARGET_INSTALL_APK${NC}"
     fi
 else
     echo -e "${YELLOW}[INFO] adb command not found. To deploy to device, install Android platform-tools.${NC}"

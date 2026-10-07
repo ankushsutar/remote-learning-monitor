@@ -10,6 +10,8 @@ build/
 out/
 apps/mobile/android/
 android/
+release/
+.expo/
 *.apk
 *.aab
 

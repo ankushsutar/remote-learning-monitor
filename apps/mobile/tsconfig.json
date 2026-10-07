@@ -9,8 +9,15 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "usage-telemetry": ["modules/usage-telemetry"]
+      "usage-telemetry": [
+        "modules/usage-telemetry"
+      ]
     }
   },
-  "include": ["src/**/*", "modules/**/*", "plugins/**/*"]
+  "include": [
+    "src/**/*",
+    "modules/**/*",
+    "plugins/**/*"
+  ],
+  "extends": "expo/tsconfig.base"
 }
