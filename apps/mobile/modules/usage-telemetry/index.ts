@@ -60,7 +60,8 @@ const mockModule: NativeUsageTelemetryModule = {
     console.log(`[UsageTelemetry] Mock configureSyncWorker: ${backendUrl}, device: ${deviceId}`);
   },
   startBackgroundSync: () => console.log('[UsageTelemetry] Mock startBackgroundSync'),
-  stopBackgroundSync: () => console.log('[UsageTelemetry] Mock stopBackgroundSync')
+  stopBackgroundSync: () => console.log('[UsageTelemetry] Mock stopBackgroundSync'),
+  openAppSettings: () => console.log('[UsageTelemetry] Mock openAppSettings invoked')
 };
 
 let NativeModule: NativeUsageTelemetryModule;

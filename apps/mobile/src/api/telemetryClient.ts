@@ -11,7 +11,7 @@ export class TelemetryApiClient {
   private baseUrl: string;
   private token: string | null = null;
 
-  constructor(baseUrl: string = 'http://10.0.2.2:4000') {
+  constructor(baseUrl: string = 'http://10.0.0.209:4000') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
