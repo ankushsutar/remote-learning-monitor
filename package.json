@@ -13,6 +13,7 @@
     "mobile:start": "npm --prefix apps/mobile run start",
     "mobile:dev": "./scripts/mobile-dev.sh",
     "mobile:build": "./scripts/build-mobile.sh",
+    "mobile:bundle": "./scripts/build-bundle.sh",
     "seed": "npm --prefix services/backend run seed"
   }
 }

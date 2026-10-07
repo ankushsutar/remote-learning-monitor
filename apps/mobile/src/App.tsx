@@ -16,6 +16,7 @@ import { StatusCard } from './components/StatusCard';
 import { PermissionToggle } from './components/PermissionToggle';
 import { TelemetryQueueList } from './components/TelemetryQueueList';
 import { LiveMetricsView } from './components/LiveMetricsView';
+import { ProminentDisclosureModal } from './components/ProminentDisclosureModal';
 import { telemetryClient } from './api/telemetryClient';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
     studentName: string;
     deviceId: string;
   } | null>(null);
+  const [showDisclosure, setShowDisclosure] = useState(false);
 
   const {
     hasUsagePermission,
@@ -135,7 +137,7 @@ export default function App() {
             title="Usage Access (UsageStatsManager)"
             description="Required to measure exact foreground intervals via ACTIVITY_RESUMED and ACTIVITY_PAUSED events."
             isGranted={hasUsagePermission}
-            onRequest={requestUsagePermission}
+            onRequest={() => setShowDisclosure(true)}
           />
           <PermissionToggle
             title="Battery Optimization Exemption"
@@ -219,6 +221,16 @@ export default function App() {
         {/* Queue Preview */}
         <TelemetryQueueList records={queuedRecords} />
       </ScrollView>
+
+      {/* Prominent Privacy & Data Disclosure Modal */}
+      <ProminentDisclosureModal
+        visible={showDisclosure}
+        onAccept={() => {
+          setShowDisclosure(false);
+          requestUsagePermission();
+        }}
+        onCancel={() => setShowDisclosure(false)}
+      />
     </SafeAreaView>
   );
 }
