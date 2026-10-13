@@ -3,7 +3,7 @@ const { withAndroidManifest } = require('@expo/config-plugins');
 /**
  * Expo Config Plugin to inject required Android permissions and manifest properties
  * for UsageStatsManager, NetworkStatsManager, battery optimization overrides,
- * and WorkManager background execution.
+ * Android 14 Foreground Service (dataSync), and WorkManager background execution.
  */
 module.exports = function withUsagePermissions(config) {
   return withAndroidManifest(config, async (config) => {
@@ -49,6 +49,18 @@ module.exports = function withUsagePermissions(config) {
         },
       },
       {
+        name: 'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+        attributes: {
+          'android:name': 'android.permission.FOREGROUND_SERVICE_DATA_SYNC',
+        },
+      },
+      {
+        name: 'android.permission.POST_NOTIFICATIONS',
+        attributes: {
+          'android:name': 'android.permission.POST_NOTIFICATIONS',
+        },
+      },
+      {
         name: 'android.permission.RECEIVE_BOOT_COMPLETED',
         attributes: {
           'android:name': 'android.permission.RECEIVE_BOOT_COMPLETED',
@@ -74,7 +86,6 @@ module.exports = function withUsagePermissions(config) {
       );
 
       if (existingIdx >= 0) {
-        // Merge attributes (especially tools:ignore="ProtectedPermissions")
         permissions[existingIdx].$ = {
           ...permissions[existingIdx].$,
           ...attributes,
@@ -83,6 +94,30 @@ module.exports = function withUsagePermissions(config) {
         permissions.push({ $: attributes });
       }
     });
+
+    // 3. Register TelemetryForegroundService under <application>
+    if (androidManifest.application && Array.isArray(androidManifest.application)) {
+      const app = androidManifest.application[0];
+      if (!Array.isArray(app.service)) {
+        app.service = [];
+      }
+
+      const svcName = 'expo.modules.usagetelemetry.service.TelemetryForegroundService';
+      const existingSvc = app.service.find(
+        (s) => s.$ && s.$['android:name'] === svcName
+      );
+
+      if (!existingSvc) {
+        app.service.push({
+          $: {
+            'android:name': svcName,
+            'android:enabled': 'true',
+            'android:exported': 'false',
+            'android:foregroundServiceType': 'dataSync',
+          },
+        });
+      }
+    }
 
     return config;
   });

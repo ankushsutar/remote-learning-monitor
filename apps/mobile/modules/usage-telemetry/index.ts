@@ -9,6 +9,20 @@ export interface AppTelemetryRecord {
   bytesTx: number;
 }
 
+export interface OutboxStats {
+  pendingCount: number;
+  oldestTimestamp: number;
+  newestTimestamp: number;
+  storageSizeBytes: number;
+}
+
+export interface NativeSyncResult {
+  success: boolean;
+  uploadedCount: number;
+  remainingCount: number;
+  error?: string | null;
+}
+
 interface NativeUsageTelemetryModule {
   hasUsagePermission(): boolean;
   requestUsagePermission(): void;
@@ -19,6 +33,11 @@ interface NativeUsageTelemetryModule {
   startBackgroundSync(): void;
   stopBackgroundSync(): void;
   openAppSettings(): void;
+  getOutboxStats(): OutboxStats;
+  getOutboxRecords(limit: number): AppTelemetryRecord[];
+  triggerImmediateSync(): Promise<NativeSyncResult>;
+  startForegroundMonitoring(): void;
+  stopForegroundMonitoring(): void;
 }
 
 // Fallback for non-Android environments or development testing
@@ -61,7 +80,22 @@ const mockModule: NativeUsageTelemetryModule = {
   },
   startBackgroundSync: () => console.log('[UsageTelemetry] Mock startBackgroundSync'),
   stopBackgroundSync: () => console.log('[UsageTelemetry] Mock stopBackgroundSync'),
-  openAppSettings: () => console.log('[UsageTelemetry] Mock openAppSettings invoked')
+  openAppSettings: () => console.log('[UsageTelemetry] Mock openAppSettings invoked'),
+  getOutboxStats: () => ({
+    pendingCount: 0,
+    oldestTimestamp: 0,
+    newestTimestamp: 0,
+    storageSizeBytes: 0
+  }),
+  getOutboxRecords: (_limit: number) => [],
+  triggerImmediateSync: async () => ({
+    success: true,
+    uploadedCount: 0,
+    remainingCount: 0,
+    error: null
+  }),
+  startForegroundMonitoring: () => console.log('[UsageTelemetry] Mock startForegroundMonitoring'),
+  stopForegroundMonitoring: () => console.log('[UsageTelemetry] Mock stopForegroundMonitoring')
 };
 
 let NativeModule: NativeUsageTelemetryModule;
@@ -123,6 +157,38 @@ export function openAppSettings(): void {
   NativeModule.openAppSettings();
 }
 
+export function getOutboxStats(): OutboxStats {
+  try {
+    return NativeModule.getOutboxStats();
+  } catch {
+    return { pendingCount: 0, oldestTimestamp: 0, newestTimestamp: 0, storageSizeBytes: 0 };
+  }
+}
+
+export function getOutboxRecords(limit = 50): AppTelemetryRecord[] {
+  try {
+    return NativeModule.getOutboxRecords(limit);
+  } catch {
+    return [];
+  }
+}
+
+export async function triggerImmediateSync(): Promise<NativeSyncResult> {
+  try {
+    return await NativeModule.triggerImmediateSync();
+  } catch (err: any) {
+    return { success: false, uploadedCount: 0, remainingCount: 0, error: err.message };
+  }
+}
+
+export function startForegroundMonitoring(): void {
+  NativeModule.startForegroundMonitoring();
+}
+
+export function stopForegroundMonitoring(): void {
+  NativeModule.stopForegroundMonitoring();
+}
+
 export default {
   hasUsagePermission,
   requestUsagePermission,
@@ -132,5 +198,10 @@ export default {
   collectIntervalTelemetry,
   configureSyncWorker,
   startBackgroundSync,
-  stopBackgroundSync
+  stopBackgroundSync,
+  getOutboxStats,
+  getOutboxRecords,
+  triggerImmediateSync,
+  startForegroundMonitoring,
+  stopForegroundMonitoring
 };

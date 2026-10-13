@@ -6,6 +6,7 @@ export interface QueuedTelemetryRecord extends AppTelemetryRecord {
   createdAt: number;
   retryCount: number;
   lastError?: string;
+  status?: string;
 }
 
 export interface SyncResult {

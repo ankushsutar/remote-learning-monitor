@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { verifyDeviceToken } from '../middleware/auth';
 import { telemetryService } from '../services/telemetryService';
 import { getDatabase } from '../db/connection';
+import { telemetryBroadcaster } from '../services/telemetryBroadcaster';
 
 const TelemetryIntervalSchema = z.object({
   packageName: z.string().min(1).max(255),
@@ -30,6 +31,7 @@ export async function telemetryRoutes(server: FastifyInstance) {
     { preHandler: [verifyDeviceToken] },
     async (request, reply) => {
       const device = request.device!;
+      const startTime = Date.now();
 
       // Validate incoming batch using Zod schema
       const parseResult = TelemetryBatchSchema.safeParse(request.body);
@@ -46,6 +48,26 @@ export async function telemetryRoutes(server: FastifyInstance) {
 
       try {
         const result = await telemetryService.ingestBatch(device.deviceId, intervals);
+        const durationMs = Date.now() - startTime;
+
+        // Record metrics
+        telemetryBroadcaster.recordBatchMetrics(intervals.length, durationMs, device.deviceId);
+
+        // Broadcast to live Web Dashboard via Server-Sent Events (SSE)
+        telemetryBroadcaster.broadcast({
+          deviceId: device.deviceId,
+          studentName: `Device ${device.deviceId.slice(0, 8)}`,
+          intervalCount: intervals.length,
+          totalDurationSec: intervals.reduce((acc, i) => acc + i.foregroundDurationSec, 0),
+          totalBytesRx: intervals.reduce((acc, i) => acc + i.bytesRx, 0),
+          totalBytesTx: intervals.reduce((acc, i) => acc + i.bytesTx, 0),
+          timestamp: new Date().toISOString(),
+          intervals: intervals.slice(0, 5).map((i) => ({
+            packageName: i.packageName,
+            durationSec: i.foregroundDurationSec
+          }))
+        });
+
         return reply.status(200).send({
           success: true,
           ...result
@@ -60,6 +82,14 @@ export async function telemetryRoutes(server: FastifyInstance) {
       }
     }
   );
+
+  /**
+   * Real-Time Server-Sent Events (SSE) Stream Endpoint
+   * Connected directly to Web Management Dashboard
+   */
+  server.get('/api/v1/telemetry/stream', async (request, reply) => {
+    telemetryBroadcaster.addClient(reply);
+  });
 
   /**
    * Simulation / Testing Ingestion Endpoint
@@ -103,6 +133,20 @@ export async function telemetryRoutes(server: FastifyInstance) {
     }));
 
     const result = await telemetryService.ingestBatch(targetDeviceId, intervals);
+
+    telemetryBroadcaster.broadcast({
+      deviceId: targetDeviceId,
+      studentName: 'Alex Rivera (Simulated)',
+      intervalCount: intervals.length,
+      totalDurationSec: intervals.reduce((acc, i) => acc + i.foregroundDurationSec, 0),
+      totalBytesRx: intervals.reduce((acc, i) => acc + i.bytesRx, 0),
+      totalBytesTx: intervals.reduce((acc, i) => acc + i.bytesTx, 0),
+      timestamp: new Date().toISOString(),
+      intervals: intervals.map((i) => ({
+        packageName: i.packageName,
+        durationSec: i.foregroundDurationSec
+      }))
+    });
 
     return reply.status(200).send({
       simulated: true,

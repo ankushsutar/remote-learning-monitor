@@ -50,7 +50,7 @@ fi
 
 # Fallback default ports if not specified in .env
 BACKEND_PORT="${PORT:-4000}"
-DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
+DASHBOARD_PORT="${DASHBOARD_PORT:-3001}"
 
 # Check Node environment
 if ! command -v node &> /dev/null; then
@@ -86,6 +86,7 @@ echo ""
 
 # Trap handler for graceful shutdown
 cleanup() {
+    trap - SIGINT SIGTERM EXIT
     echo ""
     echo -e "${YELLOW}[SHUTDOWN] Terminating backend and dashboard servers...${NC}"
     kill 0 2>/dev/null || true

@@ -12,6 +12,10 @@ declare module 'react-native' {
   export const Alert: any;
   export const Modal: any;
   export const Platform: { OS: 'ios' | 'android' | 'web' };
+  export const Linking: any;
+  export const Vibration: any;
+  export const AppState: any;
+  export type AppStateStatus = 'active' | 'background' | 'inactive';
 }
 
 declare module 'expo-modules-core' {

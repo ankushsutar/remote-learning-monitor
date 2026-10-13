@@ -91,7 +91,9 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
         PERFORM create_hypertable('telemetry_intervals', 'start_time', if_not_exists => TRUE);
-        RAISE NOTICE 'TimescaleDB hypertable created for telemetry_intervals.';
+        PERFORM add_retention_policy('telemetry_intervals', INTERVAL '90 days', if_not_exists => TRUE);
+        PERFORM add_compression_policy('telemetry_intervals', INTERVAL '7 days', if_not_exists => TRUE);
+        RAISE NOTICE 'TimescaleDB hypertable, 90-day retention, and 7-day compression policy activated.';
     ELSE
         RAISE NOTICE 'TimescaleDB extension not loaded; using standard PostgreSQL partitioned/indexed table.';
     END IF;
@@ -99,3 +101,4 @@ EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE 'TimescaleDB hypertable setup skipped or already active: %', SQLERRM;
 END$$;
+

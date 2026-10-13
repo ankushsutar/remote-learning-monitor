@@ -43,18 +43,18 @@
 
 All environment variables across the entire monorepo are consolidated into a single `.env` file at the repository root. A template is provided in [`.env.example`](./.env.example).
 
-| Variable Category | Key Variables | Default Value | Description |
-| :--- | :--- | :--- | :--- |
-| **Global Runtime** | `NODE_ENV`, `LOG_LEVEL` | `development`, `info` | Node environment & log verbosity |
-| **Ingestion Backend** | `PORT`, `HOST` | `4000`, `0.0.0.0` | Fastify HTTP server binding |
-| **Security & Auth** | `JWT_SECRET`, `JWT_EXPIRY` | `antigravity-...`, `7d` | Rotating device token signing key & TTL |
-| **Database** | `DATABASE_URL` | `postgresql://...` | PostgreSQL connection string (auto-fallbacks to in-memory) |
-| **Deduplication** | `REDIS_URL`, `REDIS_DEDUP_TTL_SEC` | `redis://...`, `86400` | Redis batch deduplication cache |
-| **Web Dashboard** | `DASHBOARD_PORT`, `NEXT_PUBLIC_BACKEND_URL` | `3000`, `http://localhost:4000` | Next.js port & backend proxy target |
-| **Mobile Client** | `EXPO_PUBLIC_BACKEND_URL` | `http://10.0.2.2:4000` | Target API URL (10.0.2.2 for Android Emulator) |
-| **Compliance** | `TELEMETRY_SYNC_INTERVAL_MIN` | `15` | Periodic background WorkManager sync interval |
-| **Tamper Alerts** | `TAMPER_SYNC_TIMEOUT_HOURS` | `2` | Inactivity threshold before triggering tamper alarm |
-| **Spike Detection** | `CLASSROOM_BANDWIDTH_SPIKE_MB` | `15` | Streaming/gaming data limit during class hours |
+| Variable Category     | Key Variables                               | Default Value                   | Description                                                |
+| :-------------------- | :------------------------------------------ | :------------------------------ | :--------------------------------------------------------- |
+| **Global Runtime**    | `NODE_ENV`, `LOG_LEVEL`                     | `development`, `info`           | Node environment & log verbosity                           |
+| **Ingestion Backend** | `PORT`, `HOST`                              | `4000`, `0.0.0.0`               | Fastify HTTP server binding                                |
+| **Security & Auth**   | `JWT_SECRET`, `JWT_EXPIRY`                  | `antigravity-...`, `7d`         | Rotating device token signing key & TTL                    |
+| **Database**          | `DATABASE_URL`                              | `postgresql://...`              | PostgreSQL connection string (auto-fallbacks to in-memory) |
+| **Deduplication**     | `REDIS_URL`, `REDIS_DEDUP_TTL_SEC`          | `redis://...`, `86400`          | Redis batch deduplication cache                            |
+| **Web Dashboard**     | `DASHBOARD_PORT`, `NEXT_PUBLIC_BACKEND_URL` | `3001`, `http://localhost:4000` | Next.js port & backend proxy target                        |
+| **Mobile Client**     | `EXPO_PUBLIC_BACKEND_URL`                   | `http://10.0.2.2:4000`          | Target API URL (10.0.2.2 for Android Emulator)             |
+| **Compliance**        | `TELEMETRY_SYNC_INTERVAL_MIN`               | `15`                            | Periodic background WorkManager sync interval              |
+| **Tamper Alerts**     | `TAMPER_SYNC_TIMEOUT_HOURS`                 | `2`                             | Inactivity threshold before triggering tamper alarm        |
+| **Spike Detection**   | `CLASSROOM_BANDWIDTH_SPIKE_MB`              | `15`                            | Streaming/gaming data limit during class hours             |
 
 ---
 
@@ -69,11 +69,13 @@ To start the Ingestion Backend and Web Dashboard concurrently with automatic dat
 ```
 
 Once running:
-- **Web Management Dashboard:** [http://localhost:3000](http://localhost:3000)
+
+- **Web Management Dashboard:** [http://localhost:3001](http://localhost:3001)
 - **Fastify Ingestion API:** [http://localhost:4000](http://localhost:4000)
 - **API Health Check:** [http://localhost:4000/health](http://localhost:4000/health)
 
 To run the automated verification test suite:
+
 ```bash
 ./scripts/test-pipeline.sh
 ```
@@ -83,22 +85,27 @@ To run the automated verification test suite:
 ## 3. How to Build the Mobile App (`apps/mobile`)
 
 ### Prerequisites
+
 1. **Node.js 18+** & npm.
 2. **JDK 17** (`openjdk-17-jdk`).
 3. **Android Studio & SDK** targeting API 34 (`Android 14+`).
 4. **Android device or emulator** connected via ADB.
 
 ### Option A: Automated Build Script (Recommended)
+
 Run the automated script which bundles JavaScript assets, applies the custom native plugin, and exports the APK directly to the root `release/` directory:
 
 ```bash
 ./scripts/build-mobile.sh
 ```
+
 The compiled APK will immediately be available at:
 `release/student-telemetry-client.apk` (and `release/app-debug.apk`)
 
 ### Option B: Step-by-Step Manual Build
+
 1. **Navigate to the mobile directory:**
+
    ```bash
    cd apps/mobile
    npm install
@@ -106,32 +113,37 @@ The compiled APK will immediately be available at:
 
 2. **Generate the native Android project via Expo Prebuild:**
    The custom plugin [`plugins/withUsagePermissions.js`](./plugins/withUsagePermissions.js) automatically injects required permissions (`PACKAGE_USAGE_STATS`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `FOREGROUND_SERVICE`, `RECEIVE_BOOT_COMPLETED`) into `AndroidManifest.xml`:
+
    ```bash
    npx expo prebuild --platform android --no-install
    ```
 
 3. **Pre-bundle JavaScript Assets:**
+
    ```bash
    mkdir -p android/app/src/main/assets
    npx expo export:embed --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
    ```
 
 4. **Compile the Debug APK:**
+
    ```bash
    cd android
    ./gradlew assembleDebug
    ```
+
    The compiled APK is located at:
    `android/app/build/outputs/apk/debug/app-debug.apk`
 
 5. **Install onto your connected device or emulator:**
+
    ```bash
    adb install -r ../../release/student-telemetry-client.apk
    # or
    adb install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
-5. **Launch the application:**
+6. **Launch the application:**
    ```bash
    adb shell am start -n com.telemetry.studentmonitor/com.telemetry.studentmonitor.MainActivity
    ```
@@ -141,6 +153,7 @@ The compiled APK will immediately be available at:
 ## 4. How to Use the System
 
 ### Step 1: Device Enrollment
+
 1. Open the **Student Telemetry Client** app on your Android device.
 2. Enter the **Backend API Endpoint**:
    - For an **Android Emulator**: `http://10.0.2.2:4000`
@@ -151,18 +164,21 @@ The compiled APK will immediately be available at:
    - The app automatically configures and starts the Android `WorkManager` background service.
 
 ### Step 2: Granting Required Android System Permissions
+
 The mobile app displays permission status cards:
+
 1. **Usage Access (`UsageStatsManager`):**
    - Tap **Grant Access**.
    - Android will open **Usage Access Settings**.
    - Toggle **Student Telemetry Client** to **Allowed**.
-   - *Why this is needed:* Allows reading exact application foreground transitions (`ACTIVITY_RESUMED` / `ACTIVITY_PAUSED`) without estimating.
+   - _Why this is needed:_ Allows reading exact application foreground transitions (`ACTIVITY_RESUMED` / `ACTIVITY_PAUSED`) without estimating.
 2. **Battery Optimization Exemption (`PowerManager`):**
    - Tap **Grant Access**.
    - Confirm the dialog asking to "Let app run in the background without battery optimization".
-   - *Why this is needed:* Prevents Android Doze mode from killing periodic 15-minute `WorkManager` background sync cycles when the phone is idle.
+   - _Why this is needed:_ Prevents Android Doze mode from killing periodic 15-minute `WorkManager` background sync cycles when the phone is idle.
 
 ### Step 3: Persistent Background Telemetry
+
 - The app automatically runs `TelemetrySyncWorker` every 15 minutes with `NetworkType.CONNECTED` constraints.
 - Intervals are written to the local SQLite FIFO queue first (`expo-sqlite`).
 - When network connectivity is established, batches are uploaded to `POST /api/v1/telemetry/batch`.
@@ -171,7 +187,8 @@ The mobile app displays permission status cards:
 - You can tap **Capture 15m Telemetry** and **Sync Offline Buffer** at any time to trigger a manual sync.
 
 ### Step 4: Web Management Dashboard
-Open [http://localhost:3000](http://localhost:3000) in your browser:
+
+Open [http://localhost:3001](http://localhost:3001) in your browser:
 
 1. **Student Profile Switcher:**
    - Switch between **Aggregated Fleet View** and individual students (Alex Rivera, Maya Patel, Noah Davis, etc.).

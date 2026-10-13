@@ -2,10 +2,11 @@ package expo.modules.usagetelemetry
 
 import android.app.AppOpsManager
 import android.content.Context
-import android.content.SharedPreferences
 import android.os.Build
 import android.os.Process
+import android.os.SystemClock
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -13,7 +14,9 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import expo.modules.usagetelemetry.db.TelemetryOutboxDbHelper
 import expo.modules.usagetelemetry.models.AppTelemetryRecord
+import expo.modules.usagetelemetry.security.SecureStorageManager
 import expo.modules.usagetelemetry.utils.EventIntervalCalculator
 import expo.modules.usagetelemetry.utils.NetworkStatsHelper
 import kotlinx.coroutines.Dispatchers
@@ -26,8 +29,8 @@ import java.net.URL
 import java.util.concurrent.TimeUnit
 
 /**
- * Persistent background worker scheduled every 15 minutes to guarantee telemetry ingestion
- * even when the UI thread or React Native JS process is terminated.
+ * Enterprise Background Worker scheduled via Android WorkManager (15-min periodic).
+ * Persists intervals into unified native SQLite Outbox and synchronizes with exponential backoff.
  */
 class TelemetrySyncWorker(
     private val appContext: Context,
@@ -37,14 +40,10 @@ class TelemetrySyncWorker(
     companion object {
         const val TAG = "TelemetrySyncWorker"
         const val WORK_NAME = "PeriodicTelemetrySyncWorker"
-        const val PREFS_NAME = "TelemetryWorkerPrefs"
-        const val KEY_LAST_SYNC_TIME = "last_sync_timestamp"
-        const val KEY_BACKEND_URL = "backend_url"
-        const val KEY_DEVICE_TOKEN = "device_token"
-        const val KEY_DEVICE_ID = "device_id"
 
         /**
-         * Enqueues periodic 15-minute background telemetry sync with NetworkType.CONNECTED constraint.
+         * Enqueues periodic 15-minute background telemetry sync with NetworkType.CONNECTED constraint
+         * and exponential backoff retry policy.
          */
         @JvmStatic
         fun schedulePeriodicSync(context: Context) {
@@ -57,6 +56,10 @@ class TelemetrySyncWorker(
                 5, TimeUnit.MINUTES // Flex interval
             )
                 .setConstraints(constraints)
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    5, TimeUnit.MINUTES
+                )
                 .addTag(TAG)
                 .build()
 
@@ -65,7 +68,7 @@ class TelemetrySyncWorker(
                 ExistingPeriodicWorkPolicy.UPDATE,
                 syncRequest
             )
-            Log.i(TAG, "Enqueued periodic WorkManager telemetry sync job (15 min interval).")
+            Log.i(TAG, "Enqueued periodic WorkManager telemetry sync job with exponential backoff.")
         }
 
         @JvmStatic
@@ -76,35 +79,43 @@ class TelemetrySyncWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        Log.i(TAG, "Executing scheduled background telemetry sync cycle...")
+        Log.i(TAG, "Executing scheduled background telemetry sync cycle (Attempt: $runAttemptCount)...")
 
         if (!hasUsageStatsPermission()) {
             Log.w(TAG, "Usage Stats permission revoked. Aborting background telemetry collection.")
             return@withContext Result.failure()
         }
 
-        val prefs: SharedPreferences =
-            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val secureStorage = SecureStorageManager(appContext)
+        val outbox = TelemetryOutboxDbHelper.getInstance(appContext)
 
         val now = System.currentTimeMillis()
         val defaultStart = now - (15 * 60 * 1000L) // Default 15m lookback
-        val startTime = prefs.getLong(KEY_LAST_SYNC_TIME, defaultStart).coerceAtLeast(now - (24 * 60 * 60 * 1000L))
+        val lastSync = secureStorage.getLastSyncTimestamp()
+
+        // Clock drift protection & bound sanitization
+        val startTime = if (lastSync in 1 until now) {
+            lastSync.coerceAtLeast(now - (24 * 60 * 60 * 1000L))
+        } else {
+            defaultStart
+        }
         val endTime = now
 
         if (endTime <= startTime) {
-            Log.i(TAG, "EndTime is before or equal to startTime. Skipping interval.")
+            Log.i(TAG, "Interval span zero or negative due to clock anomaly. Resetting reference timestamp.")
+            secureStorage.setLastSyncTimestamp(now)
             return@withContext Result.success()
         }
 
         try {
+            // 1. Collect telemetry intervals from UsageStatsManager & NetworkStatsManager
             val eventCalculator = EventIntervalCalculator(appContext)
             val networkStatsHelper = NetworkStatsHelper(appContext)
 
             val foregroundDurations = eventCalculator.calculateForegroundDurations(startTime, endTime)
-            val records = mutableListOf<AppTelemetryRecord>()
+            val freshRecords = mutableListOf<AppTelemetryRecord>()
 
             for ((pkg, durationSec) in foregroundDurations) {
-                // Ignore system launcher or zero usage
                 if (durationSec <= 0 && pkg.contains("launcher")) continue
 
                 val uid = networkStatsHelper.getUidForPackage(pkg)
@@ -114,7 +125,7 @@ class TelemetrySyncWorker(
                     NetworkStatsHelper.NetworkDelta(0L, 0L)
                 }
 
-                records.add(
+                freshRecords.add(
                     AppTelemetryRecord(
                         packageName = pkg,
                         startTime = startTime,
@@ -126,30 +137,45 @@ class TelemetrySyncWorker(
                 )
             }
 
-            Log.i(TAG, "Collected ${records.size} telemetry records between $startTime and $endTime.")
+            // 2. Persist directly into Native SQLite Outbox Buffer (Deduplicated)
+            if (freshRecords.isNotEmpty()) {
+                outbox.enqueueRecords(freshRecords)
+            }
 
-            val backendUrl = prefs.getString(KEY_BACKEND_URL, null)
-            val deviceToken = prefs.getString(KEY_DEVICE_TOKEN, null)
+            // 3. Process Pending Buffer from Native Outbox
+            val pendingEntries = outbox.getPendingRecords(100)
+            if (pendingEntries.isEmpty()) {
+                secureStorage.setLastSyncTimestamp(endTime)
+                Log.i(TAG, "Outbox queue empty. Cycle completed successfully.")
+                return@withContext Result.success()
+            }
 
-            if (!backendUrl.isNullOrBlank() && !deviceToken.isNullOrBlank() && records.isNotEmpty()) {
-                val uploadSuccess = uploadTelemetryBatch(backendUrl, deviceToken, records)
+            val backendUrl = secureStorage.getBackendUrl()
+            val deviceToken = secureStorage.getDeviceToken()
+
+            if (!backendUrl.isNullOrBlank() && !deviceToken.isNullOrBlank()) {
+                val pendingIds = pendingEntries.map { it.id }
+                val uploadSuccess = uploadEntriesBatch(backendUrl, deviceToken, pendingEntries)
+
                 if (uploadSuccess) {
-                    prefs.edit().putLong(KEY_LAST_SYNC_TIME, endTime).apply()
-                    Log.i(TAG, "Telemetry batch successfully uploaded and committed.")
-                    return@withContext Result.success()
+                    outbox.deleteRecords(pendingIds)
+                    secureStorage.setLastSyncTimestamp(endTime)
+                    Log.i(TAG, "Successfully synced and purged ${pendingIds.size} intervals from native outbox.")
+                    Result.success()
                 } else {
-                    Log.w(TAG, "Upload failed. Requesting WorkManager retry.")
-                    return@withContext Result.retry()
+                    outbox.incrementRetry(pendingIds)
+                    Log.w(TAG, "Batch transmission failed. Requesting WorkManager exponential retry.")
+                    Result.retry()
                 }
             } else {
-                // If backend url not configured or empty records, update timestamp and finish
-                prefs.edit().putLong(KEY_LAST_SYNC_TIME, endTime).apply()
-                return@withContext Result.success()
+                Log.w(TAG, "Device not paired or backend credentials missing in Keystore. Buffering in outbox.")
+                secureStorage.setLastSyncTimestamp(endTime)
+                Result.success()
             }
 
         } catch (e: Exception) {
             Log.e(TAG, "Unhandled exception during telemetry sync worker execution", e)
-            if (runAttemptCount < 3) {
+            if (runAttemptCount < 4) {
                 Result.retry()
             } else {
                 Result.failure()
@@ -157,10 +183,10 @@ class TelemetrySyncWorker(
         }
     }
 
-    private fun uploadTelemetryBatch(
+    private fun uploadEntriesBatch(
         baseUrl: String,
         token: String,
-        records: List<AppTelemetryRecord>
+        entries: List<TelemetryOutboxDbHelper.OutboxEntry>
     ): Boolean {
         var connection: HttpURLConnection? = null
         return try {
@@ -170,6 +196,7 @@ class TelemetrySyncWorker(
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("User-Agent", "Aegis-Android-Client/1.0.0 (API ${Build.VERSION.SDK_INT})")
                 connectTimeout = 15000
                 readTimeout = 15000
                 doOutput = true
@@ -177,7 +204,7 @@ class TelemetrySyncWorker(
 
             val payload = JSONObject().apply {
                 val intervals = JSONArray()
-                for (rec in records) {
+                for (rec in entries) {
                     val item = JSONObject().apply {
                         put("packageName", rec.packageName)
                         put("startTime", rec.startTime)
@@ -198,10 +225,13 @@ class TelemetrySyncWorker(
             }
 
             val responseCode = connection.responseCode
-            Log.i(TAG, "Telemetry upload responded with HTTP code: $responseCode")
-            responseCode in 200..299
+            val isSuccess = responseCode in 200..299
+            if (!isSuccess) {
+                Log.w(TAG, "Backend returned HTTP response status: $responseCode")
+            }
+            isSuccess
         } catch (e: Exception) {
-            Log.e(TAG, "Error performing telemetry HTTP upload: ${e.message}")
+            Log.e(TAG, "Network transport failure during telemetry upload", e)
             false
         } finally {
             connection?.disconnect()
@@ -209,21 +239,27 @@ class TelemetrySyncWorker(
     }
 
     private fun hasUsageStatsPermission(): Boolean {
-        val appOps = appContext.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                appContext.packageName
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                appContext.packageName
-            )
+        return try {
+            val appOps = appContext.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
+                ?: return false
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                appOps.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    appContext.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOps.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    appContext.packageName
+                )
+            }
+            mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed checking usage stats permission", e)
+            false
         }
-        return mode == AppOpsManager.MODE_ALLOWED
     }
 }

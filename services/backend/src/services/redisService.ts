@@ -8,7 +8,9 @@ export interface IDeduplicationCache {
     records: T[]
   ): Promise<{ newRecords: T[]; duplicateCount: number }>;
   close(): Promise<void>;
+  ping(): Promise<boolean>;
 }
+
 
 class RedisCache implements IDeduplicationCache {
   private client: Redis;
@@ -89,7 +91,17 @@ class RedisCache implements IDeduplicationCache {
       this.client.disconnect();
     }
   }
+
+  async ping(): Promise<boolean> {
+    try {
+      const res = await this.client.ping();
+      return res === 'PONG';
+    } catch {
+      return false;
+    }
+  }
 }
+
 
 /**
  * Resilient In-Memory Deduplication Cache with TTL and LRU expiration.
@@ -146,6 +158,10 @@ class MemoryCache implements IDeduplicationCache {
   async close(): Promise<void> {
     this.cache.clear();
   }
+
+  async ping(): Promise<boolean> {
+    return true;
+  }
 }
 
 let cacheInstance: IDeduplicationCache | null = null;
@@ -155,4 +171,9 @@ export function getDeduplicationCache(): IDeduplicationCache {
 
   cacheInstance = new MemoryCache();
   return cacheInstance;
+}
+
+export async function isRedisConnected(): Promise<boolean> {
+  const cache = getDeduplicationCache();
+  return cache.ping();
 }

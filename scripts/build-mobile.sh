@@ -117,16 +117,21 @@ if command -v adb &> /dev/null; then
         echo -e "${GREEN}[OK] Detected active Android device(s):${NC}"
         echo "$DEVICES"
         if [ -n "$TARGET_INSTALL_APK" ] && [ -f "$TARGET_INSTALL_APK" ]; then
-            echo -e "${CYAN}Installing APK onto device from release folder...${NC}"
-            adb install -r "$TARGET_INSTALL_APK"
+            echo -e "${CYAN}Installing APK onto device...${NC}"
+            adb install -r -d -t "$TARGET_INSTALL_APK"
             echo -e "${GREEN}[SUCCESS] Installed Student Telemetry Client on connected device!${NC}"
+            echo -e "${CYAN}Granting Usage Stats and Battery Optimization exemptions via ADB...${NC}"
+            adb shell appops set com.telemetry.studentmonitor GET_USAGE_STATS allow || true
+            adb shell dumpsys deviceidle whitelist +com.telemetry.studentmonitor || true
             echo -e "${CYAN}Launching application...${NC}"
             adb shell am start -n com.telemetry.studentmonitor/com.telemetry.studentmonitor.MainActivity || true
         fi
     else
         echo -e "${YELLOW}[INFO] No connected physical device or emulator found via adb.${NC}"
         echo -e "       Launch an emulator with: ${BOLD}emulator -avd <emulator_name>${NC}"
-        echo -e "       Then install with: ${BOLD}adb install -r $TARGET_INSTALL_APK${NC}"
+        echo -e "       If previous version is installed, uninstall it first: ${BOLD}adb uninstall com.telemetry.studentmonitor${NC}"
+        echo -e "       Then install with: ${BOLD}adb install -r -d -t $TARGET_INSTALL_APK${NC}"
+        echo -e "       Bypass Android 14 restricted settings with: ${BOLD}adb shell appops set com.telemetry.studentmonitor GET_USAGE_STATS allow${NC}"
     fi
 else
     echo -e "${YELLOW}[INFO] adb command not found. To deploy to device, install Android platform-tools.${NC}"

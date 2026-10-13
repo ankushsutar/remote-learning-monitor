@@ -1,6 +1,7 @@
 import { buildServer } from './server';
 import { seedDatabase } from './db/seeds/seed_categories';
 import { getDatabase } from './db/connection';
+import { telemetryBroadcaster } from './services/telemetryBroadcaster';
 
 async function runTests() {
   console.log('--- Starting Telemetry Platform Verification Test Suite ---');
@@ -130,12 +131,50 @@ async function runTests() {
   const studentData = JSON.parse(studentRes.payload);
   console.log(`   Enrolled Students: ${studentData.length}`);
 
-  console.log('\n>>> ALL 9 INTEGRATION VERIFICATION TESTS PASSED SUCCESSFULLY! <<<');
+  // Test 10: Kubernetes Readiness Probe
+  const readyRes = await app.inject({
+    method: 'GET',
+    url: '/health/ready'
+  });
+  console.log(`[Test 10] GET /health/ready => ${readyRes.statusCode}`);
+  const readyData = JSON.parse(readyRes.payload);
+  console.log(`   Readiness Status: ${readyData.status}, Database: ${readyData.database}, Redis: ${readyData.redis}`);
+  if (readyRes.statusCode !== 200) throw new Error('Readiness check failed');
+
+  // Test 11: Kubernetes Liveness Probe
+  const liveRes = await app.inject({
+    method: 'GET',
+    url: '/health/live'
+  });
+  console.log(`[Test 11] GET /health/live => ${liveRes.statusCode}`);
+  if (liveRes.statusCode !== 200) throw new Error('Liveness check failed');
+
+  // Test 12: Prometheus Metrics Endpoint
+  const metricsRes = await app.inject({
+    method: 'GET',
+    url: '/metrics'
+  });
+  console.log(`[Test 12] GET /metrics => ${metricsRes.statusCode}`);
+  if (!metricsRes.payload.includes('telemetry_batches_ingested_total')) {
+    throw new Error('Metrics endpoint missing telemetry counters');
+  }
+  console.log('   Prometheus Metrics Payload Verified');
+
+  // Test 13: SSE Broadcaster Diagnostics & Event Stream Dispatch
+  const initialDiag = telemetryBroadcaster.getDiagnostics();
+  console.log(`[Test 13] SSE Broadcaster Diagnostics => Active Devices: ${initialDiag.activeDevices}, Batches: ${initialDiag.batchesIngested}`);
+  if (typeof initialDiag.connectedSseClients !== 'number') {
+    throw new Error('SSE Diagnostics failed');
+  }
+
+  console.log('\n>>> ALL 13 INTEGRATION VERIFICATION TESTS PASSED SUCCESSFULLY! <<<');
   await app.close();
   process.exit(0);
 }
+
 
 runTests().catch((e) => {
   console.error('Test Suite Failed:', e);
   process.exit(1);
 });
+

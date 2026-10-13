@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { registerRootComponent } from 'expo';
 import {
   SafeAreaView,
@@ -6,7 +6,8 @@ import {
   View,
   StatusBar,
   StyleSheet,
-  Alert
+  Alert,
+  Linking
 } from 'react-native';
 import { useTelemetry } from './hooks/useTelemetry';
 import { TodayTab } from './components/TodayTab';
@@ -14,7 +15,10 @@ import { InsightsTab } from './components/InsightsTab';
 import { SettingsTab } from './components/SettingsTab';
 import { BottomTabBar, TabKey } from './components/BottomTabBar';
 import { ProminentDisclosureModal } from './components/ProminentDisclosureModal';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import { PrivacyLedgerModal } from './components/PrivacyLedgerModal';
 import { telemetryClient } from './api/telemetryClient';
+import { triggerHaptic } from './utils/haptics';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('today');
@@ -33,6 +37,8 @@ export default function App() {
     deviceId: 'dev-device-active'
   });
   const [showDisclosure, setShowDisclosure] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [showPrivacyLedger, setShowPrivacyLedger] = useState(false);
 
   const {
     hasUsagePermission,
@@ -41,6 +47,7 @@ export default function App() {
     isSyncing,
     queueStats,
     queuedRecords,
+    refreshStatus,
     requestUsagePermission,
     openAppSettings,
     requestBatteryOpt,
@@ -48,6 +55,44 @@ export default function App() {
     triggerSync,
     enableBackgroundWorker
   } = useTelemetry(backendUrl);
+
+  // Universal Deep Link Handler (aegis://enroll?server=...&code=...)
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      try {
+        const urlStr = event.url;
+        if (urlStr.includes('enroll') || urlStr.includes('pair')) {
+          const formatted = urlStr.startsWith('aegis') ? urlStr.replace('aegis://', 'http://placeholder/') : urlStr;
+          const urlObj = new URL(formatted);
+          const serverParam = urlObj.searchParams.get('server');
+          const codeParam = urlObj.searchParams.get('code');
+          if (serverParam) setBackendUrl(serverParam);
+          if (codeParam) setStudentCode(codeParam);
+          Alert.alert('School Pairing Link Detected', `Configured endpoint for: ${codeParam || 'Student'}`);
+        }
+      } catch (e) {
+        console.warn('Failed parsing deep link:', e);
+      }
+    };
+
+    if (Linking && typeof Linking.getInitialURL === 'function') {
+      Linking.getInitialURL()
+        .then((url: string | null) => {
+          if (url) handleDeepLink({ url });
+        })
+        .catch((e: any) => console.warn('getInitialURL error:', e));
+    }
+
+    let sub: any = null;
+    if (Linking && typeof Linking.addEventListener === 'function') {
+      sub = Linking.addEventListener('url', handleDeepLink);
+    }
+    return () => {
+      if (sub && typeof sub.remove === 'function') {
+        sub.remove();
+      }
+    };
+  }, []);
 
   const handlePair = async () => {
     setIsPairing(true);
@@ -64,8 +109,10 @@ export default function App() {
       });
       // Enable background WorkManager sync
       enableBackgroundWorker(res.token, res.deviceId);
+      triggerHaptic('success');
       Alert.alert('Device Paired', `Successfully linked to student profile: ${res.studentName}`);
     } catch (err: any) {
+      triggerHaptic('error');
       Alert.alert('Pairing Error', err.message || 'Unable to authorize device with backend.');
     } finally {
       setIsPairing(false);
@@ -89,6 +136,7 @@ export default function App() {
             isSyncing={isSyncing}
             onSync={triggerSync}
             pendingCount={queueStats.pendingCount}
+            onOpenPrivacyLedger={() => setShowPrivacyLedger(true)}
           />
         )}
 
@@ -119,6 +167,8 @@ export default function App() {
             pendingCount={queueStats.pendingCount}
             isSyncing={isSyncing}
             onSync={triggerSync}
+            onOpenWizard={() => setShowWizard(true)}
+            onOpenPrivacyLedger={() => setShowPrivacyLedger(true)}
           />
         )}
       </ScrollView>
@@ -138,6 +188,28 @@ export default function App() {
           requestUsagePermission();
         }}
         onCancel={() => setShowDisclosure(false)}
+      />
+
+      {/* 3-Step Guided Onboarding & Reliability Wizard */}
+      <OnboardingWizard
+        visible={showWizard}
+        onClose={() => setShowWizard(false)}
+        hasUsagePermission={hasUsagePermission}
+        isBatteryOptimizationIgnored={isBatteryOptimizationIgnored}
+        onRequestUsage={() => {
+          setShowWizard(false);
+          setShowDisclosure(true);
+        }}
+        onRequestBattery={requestBatteryOpt}
+        onOpenAppSettings={openAppSettings}
+        onRefresh={refreshStatus}
+      />
+
+      {/* Student Privacy & Governance Ledger Modal */}
+      <PrivacyLedgerModal
+        visible={showPrivacyLedger}
+        onClose={() => setShowPrivacyLedger(false)}
+        studentName={pairedInfo ? pairedInfo.studentName : 'Student'}
       />
     </SafeAreaView>
   );

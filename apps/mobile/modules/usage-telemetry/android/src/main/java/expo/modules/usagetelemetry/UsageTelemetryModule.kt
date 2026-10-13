@@ -12,15 +12,24 @@ import android.provider.Settings
 import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.usagetelemetry.db.TelemetryOutboxDbHelper
 import expo.modules.usagetelemetry.models.AppTelemetryRecord
+import expo.modules.usagetelemetry.security.SecureStorageManager
+import expo.modules.usagetelemetry.service.TelemetryForegroundService
 import expo.modules.usagetelemetry.utils.EventIntervalCalculator
 import expo.modules.usagetelemetry.utils.NetworkStatsHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Production-grade Expo Native Module for Android Usage and Network Telemetry.
- * Directly integrates UsageStatsManager, NetworkStatsManager, AppOpsManager, and PowerManager.
+ * Directly integrates UsageStatsManager, NetworkStatsManager, AppOpsManager,
+ * Android Hardware Keystore, and Unified SQLite Outbox.
  */
 class UsageTelemetryModule : Module() {
 
@@ -113,7 +122,6 @@ class UsageTelemetryModule : Module() {
             val records = mutableListOf<AppTelemetryRecord>()
 
             for ((pkg, durationSec) in foregroundDurations) {
-                // Filter system noise / empty durations
                 if (durationSec <= 0L && pkg.contains("launcher")) continue
 
                 val uid = networkStatsHelper.getUidForPackage(pkg)
@@ -135,21 +143,20 @@ class UsageTelemetryModule : Module() {
                 )
             }
 
+            // Enqueue into unified SQLite Outbox automatically
+            val outbox = TelemetryOutboxDbHelper.getInstance(context)
+            if (records.isNotEmpty()) {
+                outbox.enqueueRecords(records)
+            }
+
             records.sortedByDescending { it.foregroundDurationSec }
         }
 
-        // 6. Configure parameters for background WorkManager sync
+        // 6. Configure parameters in Android Keystore backed SecureStorageManager
         Function("configureSyncWorker") { backendUrl: String, deviceToken: String, deviceId: String ->
-            val prefs = context.getSharedPreferences(
-                TelemetrySyncWorker.PREFS_NAME,
-                Context.MODE_PRIVATE
-            )
-            prefs.edit()
-                .putString(TelemetrySyncWorker.KEY_BACKEND_URL, backendUrl)
-                .putString(TelemetrySyncWorker.KEY_DEVICE_TOKEN, deviceToken)
-                .putString(TelemetrySyncWorker.KEY_DEVICE_ID, deviceId)
-                .apply()
-            Log.i(tag, "Configured background sync worker with endpoint: $backendUrl")
+            val secureStorage = SecureStorageManager(context)
+            secureStorage.saveConfig(backendUrl, deviceToken, deviceId)
+            Log.i(tag, "Configured keystore credentials for endpoint: $backendUrl")
         }
 
         // 7. Schedule WorkManager persistent 15-minute background worker
@@ -160,6 +167,136 @@ class UsageTelemetryModule : Module() {
         // 8. Cancel WorkManager background worker
         Function("stopBackgroundSync") {
             TelemetrySyncWorker.cancelPeriodicSync(context)
+        }
+
+        // 9. Query Unified Native Outbox Statistics
+        Function("getOutboxStats") {
+            val stats = TelemetryOutboxDbHelper.getInstance(context).getStats()
+            mapOf(
+                "pendingCount" to stats.pendingCount,
+                "oldestTimestamp" to (stats.oldestTimestamp ?: 0L),
+                "newestTimestamp" to (stats.newestTimestamp ?: 0L),
+                "storageSizeBytes" to stats.storageSizeBytes
+            )
+        }
+
+        // 10. Query Buffered Entries from Native Outbox
+        Function("getOutboxRecords") { limit: Int ->
+            val entries = TelemetryOutboxDbHelper.getInstance(context).getPendingRecords(limit)
+            entries.map {
+                mapOf(
+                    "id" to it.id,
+                    "packageName" to it.packageName,
+                    "startTime" to it.startTime,
+                    "endTime" to it.endTime,
+                    "foregroundDurationSec" to it.foregroundDurationSec,
+                    "bytesRx" to it.bytesRx,
+                    "bytesTx" to it.bytesTx,
+                    "retryCount" to it.retryCount
+                )
+            }
+        }
+
+        // 11. Trigger Immediate Native Outbox Sync (Used by React Native UI)
+        AsyncFunction("triggerImmediateSync") {
+            val secureStorage = SecureStorageManager(context)
+            val outbox = TelemetryOutboxDbHelper.getInstance(context)
+            val entries = outbox.getPendingRecords(100)
+
+            if (entries.isEmpty()) {
+                return@AsyncFunction mapOf(
+                    "success" to true,
+                    "uploadedCount" to 0,
+                    "remainingCount" to 0,
+                    "error" to null
+                )
+            }
+
+            val backendUrl = secureStorage.getBackendUrl()
+            val token = secureStorage.getDeviceToken()
+
+            if (backendUrl.isNullOrBlank() || token.isNullOrBlank()) {
+                return@AsyncFunction mapOf(
+                    "success" to false,
+                    "uploadedCount" to 0,
+                    "remainingCount" to entries.size,
+                    "error" to "Device credentials missing in Keystore"
+                )
+            }
+
+                var connection: HttpURLConnection? = null
+                try {
+                    val endpoint = if (backendUrl.endsWith("/")) "${backendUrl}api/v1/telemetry/batch" else "$backendUrl/api/v1/telemetry/batch"
+                    val url = URL(endpoint)
+                    connection = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        setRequestProperty("Content-Type", "application/json")
+                        setRequestProperty("Authorization", "Bearer $token")
+                        connectTimeout = 15000
+                        readTimeout = 15000
+                        doOutput = true
+                    }
+
+                    val payload = JSONObject().apply {
+                        val intervals = JSONArray()
+                        for (rec in entries) {
+                            val item = JSONObject().apply {
+                                put("packageName", rec.packageName)
+                                put("startTime", rec.startTime)
+                                put("endTime", rec.endTime)
+                                put("foregroundDurationSec", rec.foregroundDurationSec)
+                                put("bytesRx", rec.bytesRx)
+                                put("bytesTx", rec.bytesTx)
+                            }
+                            intervals.put(item)
+                        }
+                        put("intervals", intervals)
+                        put("timestamp", System.currentTimeMillis())
+                    }
+
+                    OutputStreamWriter(connection.outputStream).use { writer ->
+                        writer.write(payload.toString())
+                        writer.flush()
+                    }
+
+                    val code = connection.responseCode
+                    if (code in 200..299) {
+                        val ids = entries.map { it.id }
+                        outbox.deleteRecords(ids)
+                        secureStorage.setLastSyncTimestamp(System.currentTimeMillis())
+                        mapOf(
+                            "success" to true,
+                            "uploadedCount" to ids.size,
+                            "remainingCount" to outbox.getStats().pendingCount,
+                            "error" to null
+                        )
+                    } else {
+                        mapOf(
+                            "success" to false,
+                            "uploadedCount" to 0,
+                            "remainingCount" to entries.size,
+                            "error" to "Server returned HTTP status $code"
+                        )
+                    }
+                } catch (e: Exception) {
+                    mapOf(
+                        "success" to false,
+                        "uploadedCount" to 0,
+                        "remainingCount" to entries.size,
+                        "error" to (e.message ?: "Network transport error")
+                    )
+                } finally {
+                    connection?.disconnect()
+                }
+        }
+
+        // 12. Fallback Foreground Service Controls
+        Function("startForegroundMonitoring") {
+            TelemetryForegroundService.start(context)
+        }
+
+        Function("stopForegroundMonitoring") {
+            TelemetryForegroundService.stop(context)
         }
     }
 

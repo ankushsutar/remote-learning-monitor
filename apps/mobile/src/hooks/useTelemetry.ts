@@ -10,6 +10,7 @@ import {
   SyncResult
 } from '../storage/db';
 import { telemetryClient } from '../api/telemetryClient';
+import { Platform } from 'react-native';
 
 export interface TelemetryState {
   hasUsagePermission: boolean;
@@ -42,12 +43,46 @@ export function useTelemetry(
     deviceId: null
   });
 
-  // Refresh permissions and queue stats
+  // Refresh permissions and unified outbox queue stats
   const refreshStatus = useCallback(async () => {
     const hasUsage = UsageTelemetry.hasUsagePermission();
     const isBatteryIgnored = UsageTelemetry.isBatteryOptimizationIgnored();
-    const stats = await getQueueStats();
-    const records = await peekQueue(15);
+
+    let stats = { pendingCount: 0, oldestTimestamp: null as number | null, newestTimestamp: null as number | null };
+    let records: QueuedTelemetryRecord[] = [];
+
+    if (Platform.OS === 'android') {
+      try {
+        const nativeStats = UsageTelemetry.getOutboxStats();
+        const nativeRecords = UsageTelemetry.getOutboxRecords(15);
+        if (nativeStats && nativeStats.pendingCount >= 0) {
+          stats = {
+            pendingCount: nativeStats.pendingCount,
+            oldestTimestamp: nativeStats.oldestTimestamp || null,
+            newestTimestamp: nativeStats.newestTimestamp || null
+          };
+          records = nativeRecords.map((r, idx) => ({
+            id: (r as any).id ?? (idx + 1),
+            packageName: r.packageName,
+            startTime: r.startTime,
+            endTime: r.endTime,
+            foregroundDurationSec: r.foregroundDurationSec,
+            bytesRx: r.bytesRx,
+            bytesTx: r.bytesTx,
+            createdAt: r.endTime,
+            retryCount: (r as any).retryCount ?? 0,
+            status: 'PENDING'
+          }));
+        }
+      } catch {
+        // Fallback to SQLite DB if native outbox threw
+        stats = await getQueueStats();
+        records = await peekQueue(15);
+      }
+    } else {
+      stats = await getQueueStats();
+      records = await peekQueue(15);
+    }
 
     setState((prev) => ({
       ...prev,
@@ -72,13 +107,13 @@ export function useTelemetry(
   // Request Usage Permission
   const requestUsagePermission = useCallback(() => {
     UsageTelemetry.requestUsagePermission();
-    setTimeout(refreshStatus, 2000);
+    setTimeout(refreshStatus, 1500);
   }, [refreshStatus]);
 
   // Request Battery Optimization Exemption
   const requestBatteryOpt = useCallback(() => {
     UsageTelemetry.requestIgnoreBatteryOptimization();
-    setTimeout(refreshStatus, 2000);
+    setTimeout(refreshStatus, 1500);
   }, [refreshStatus]);
 
   // Collect telemetry for a custom window (e.g., past 15 minutes) and enqueue
@@ -108,6 +143,20 @@ export function useTelemetry(
   const triggerSync = useCallback(async (): Promise<SyncResult> => {
     setState((prev) => ({ ...prev, isSyncing: true }));
     try {
+      if (Platform.OS === 'android') {
+        const nativeRes = await UsageTelemetry.triggerImmediateSync();
+        if (nativeRes.success) {
+          const res: SyncResult = {
+            success: true,
+            uploadedCount: nativeRes.uploadedCount,
+            remainingCount: nativeRes.remainingCount
+          };
+          setState((prev) => ({ ...prev, lastSyncResult: res }));
+          await refreshStatus();
+          return res;
+        }
+      }
+
       const token = telemetryClient.getToken() || 'dev-demo-token';
       const result = await syncBufferedTelemetry(backendUrl, token);
       setState((prev) => ({ ...prev, lastSyncResult: result }));
@@ -144,6 +193,8 @@ export function useTelemetry(
     requestBatteryOpt,
     collectAndEnqueue,
     triggerSync,
-    enableBackgroundWorker
+    enableBackgroundWorker,
+    startForegroundMonitoring: UsageTelemetry.startForegroundMonitoring,
+    stopForegroundMonitoring: UsageTelemetry.stopForegroundMonitoring
   };
 }

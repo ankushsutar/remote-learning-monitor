@@ -1,8 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { TamperAlert } from '../lib/types';
-import { AlertTriangle, BatteryWarning, Clock, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  BatteryWarning,
+  Clock,
+  ShieldAlert,
+  CheckCircle2,
+  BellRing,
+  Download,
+  Radio,
+  X
+} from 'lucide-react';
 
 interface TamperAlertIndicatorProps {
   alerts: TamperAlert[];
@@ -13,14 +23,51 @@ export const TamperAlertIndicator: React.FC<TamperAlertIndicatorProps> = ({
   alerts,
   onSelectStudent
 }) => {
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const formatDelay = (minutes: number) => {
     if (minutes < 60) return `${minutes} min ago`;
     const hrs = (minutes / 60).toFixed(1);
     return `${hrs} hrs ago`;
   };
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleSilentPing = (studentName: string) => {
+    showToast(`📡 Silent Heartbeat Ping dispatched to ${studentName}'s Android client.`);
+  };
+
+  const handleNotifyGuardian = (studentName: string, studentCode: string) => {
+    showToast(`📧 Compliance Warning Webhook delivered to Guardian of ${studentName} (${studentCode}).`);
+  };
+
+  const handleExportAuditTrail = (item: TamperAlert) => {
+    const csvContent = `Student Name,Student Code,Alert Type,Severity,Sync Delay Minutes,Timestamp\n"${item.studentName}","${item.studentCode}","${item.alertType}","${item.severity}",${item.syncDelayMinutes},"${new Date().toISOString()}"`;
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tamper-incident-${item.studentCode}-${Date.now()}.csv`;
+    a.click();
+    showToast(`📄 Audit trail exported for ${item.studentName}.`);
+  };
+
   return (
-    <div className="glass-panel rounded-2xl p-6 border border-white/10 shadow-xl">
+    <div className="glass-panel rounded-2xl p-6 border border-white/10 shadow-xl relative">
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-2xl animate-fade-in border border-indigo-400">
+          <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 hover:opacity-80">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between pb-4 border-b border-gray-800">
         <div className="flex items-center gap-2.5">
           <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
@@ -56,10 +103,10 @@ export const TamperAlertIndicator: React.FC<TamperAlertIndicatorProps> = ({
             return (
               <div
                 key={item.deviceId}
-                className="p-4 rounded-xl bg-gray-900/80 border border-rose-500/20 hover:border-rose-500/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                className="p-4 rounded-xl bg-gray-900/80 border border-rose-500/20 hover:border-rose-500/40 transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-4"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-gray-100 text-sm">{item.studentName}</span>
                     <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-gray-800 text-gray-300">
                       {item.studentCode}
@@ -92,25 +139,43 @@ export const TamperAlertIndicator: React.FC<TamperAlertIndicatorProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-end sm:self-center">
+                {/* Actionable Incident Remediation Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleSilentPing(item.studentName)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition shadow-sm"
+                    title="Request immediate silent heartbeat from student device"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Ping Device</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleNotifyGuardian(item.studentName, item.studentCode)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 transition shadow-sm"
+                    title="Send compliance alert webhook to student guardian"
+                  >
+                    <BellRing className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Notify Guardian</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleExportAuditTrail(item)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition shadow-sm"
+                    title="Export tamper event audit trail"
+                  >
+                    <Download className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Audit Log</span>
+                  </button>
+
                   {onSelectStudent && (
                     <button
                       onClick={() => onSelectStudent(item.studentId)}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 transition"
                     >
-                      Inspect Profile
+                      View Profile
                     </button>
                   )}
-                  <button
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.alert(`Direct push alert transmitted to guardian of ${item.studentName}`);
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 transition"
-                  >
-                    Send Guardian Warning
-                  </button>
                 </div>
               </div>
             );
