@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { triggerHaptic } from '../utils/haptics';
+import { ThemeColors } from '../theme/theme';
 
 export type TabKey = 'today' | 'insights' | 'settings';
 
@@ -7,41 +9,102 @@ interface BottomTabBarProps {
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
   pendingRecordsCount?: number;
+  theme: ThemeColors;
+  onQuickAction?: () => void;
 }
 
 export const BottomTabBar: React.FC<BottomTabBarProps> = ({
   activeTab,
   onTabChange,
-  pendingRecordsCount = 0
+  pendingRecordsCount = 0,
+  theme,
+  onQuickAction
 }) => {
-  const tabs = [
-    { key: 'today' as TabKey, label: 'Today', icon: '🎯' },
-    { key: 'insights' as TabKey, label: 'Insights', icon: '📊' },
-    { key: 'settings' as TabKey, label: 'Guardian', icon: '🛡️' }
-  ];
+  const isLight = theme.mode === 'light';
+
+  const handlePress = (tabKey: TabKey) => {
+    triggerHaptic('light');
+    onTabChange(tabKey);
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.bar}>
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tabButton, isActive && styles.activeTabButton]}
-              onPress={() => onTabChange(tab.key)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.tabIcon}>{tab.icon}</Text>
-              <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
-                {tab.label}
-              </Text>
-              {tab.key === 'settings' && pendingRecordsCount > 0 && (
-                <View style={styles.badgeDot} />
-              )}
-            </TouchableOpacity>
-          );
-        })}
+    <View style={styles.container} pointerEvents="box-none">
+      <View
+        style={[
+          styles.dockCapsule,
+          {
+            backgroundColor: isLight ? '#FFFFFF' : 'rgba(18, 24, 38, 0.95)',
+            borderColor: isLight ? '#E5E7EB' : 'rgba(255, 255, 255, 0.1)',
+            shadowColor: isLight ? '#64748B' : '#000000'
+          }
+        ]}
+      >
+        {/* Tab 1: Home (Active is Black Circle like Reference Image!) */}
+        <TouchableOpacity
+          style={[
+            styles.tabItem,
+            activeTab === 'today' && (isLight ? styles.activeCircleLight : styles.activeCircleDark)
+          ]}
+          onPress={() => handlePress('today')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabIcon, activeTab === 'today' && styles.activeIcon]}>
+            🏠
+          </Text>
+        </TouchableOpacity>
+
+        {/* Tab 2: Trends / Diagnostics */}
+        <TouchableOpacity
+          style={[
+            styles.tabItem,
+            activeTab === 'insights' && (isLight ? styles.activeCircleLight : styles.activeCircleDark)
+          ]}
+          onPress={() => handlePress('insights')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabIcon, activeTab === 'insights' && styles.activeIcon]}>
+            📈
+          </Text>
+        </TouchableOpacity>
+
+        {/* Tab 3: Guardian / Settings */}
+        <TouchableOpacity
+          style={[
+            styles.tabItem,
+            activeTab === 'settings' && (isLight ? styles.activeCircleLight : styles.activeCircleDark)
+          ]}
+          onPress={() => handlePress('settings')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabIcon, activeTab === 'settings' && styles.activeIcon]}>
+            🛡️
+          </Text>
+          {pendingRecordsCount > 0 && (
+            <View style={styles.badgeGlowContainer}>
+              <View style={styles.badgePill}>
+                <Text style={styles.badgeText}>
+                  {pendingRecordsCount > 99 ? '99+' : pendingRecordsCount}
+                </Text>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Action Button: Method X Circular Teal Action Button */}
+        <TouchableOpacity
+          style={[
+            styles.actionPill,
+            { backgroundColor: '#0D9488' }
+          ]}
+          onPress={() => {
+            triggerHaptic('medium');
+            if (onQuickAction) onQuickAction();
+            else handlePress('today');
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.actionPillText, { color: '#FFFFFF' }]}>⚡</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -53,59 +116,86 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    backgroundColor: 'transparent'
+    paddingHorizontal: 28,
+    paddingBottom: 22,
+    backgroundColor: 'transparent',
+    alignItems: 'center'
   },
-  bar: {
+  dockCapsule: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderRadius: 24,
-    paddingVertical: 8,
+    borderRadius: 36,
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
+    width: '100%',
+    maxWidth: 360,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.12,
     shadowRadius: 20,
-    elevation: 12
+    elevation: 10
   },
-  tabButton: {
-    flexDirection: 'row',
+  tabItem: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    justifyContent: 'center',
     position: 'relative'
   },
-  activeTabButton: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    borderWidth: 1,
-    borderColor: '#6366F1'
+  activeCircleLight: {
+    backgroundColor: '#111827', // Signature black active circle from Reference Phone 1!
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4
+  },
+  activeCircleDark: {
+    backgroundColor: '#0D9488',
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4
   },
   tabIcon: {
-    fontSize: 16,
-    marginRight: 6
+    fontSize: 18,
+    opacity: 0.7
   },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94A3B8'
+  activeIcon: {
+    opacity: 1
   },
-  activeTabLabel: {
-    color: '#818CF8',
-    fontWeight: '700'
-  },
-  badgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#F59E0B',
+  badgeGlowContainer: {
     position: 'absolute',
-    top: 6,
-    right: 8
+    top: 2,
+    right: 2
+  },
+  badgePill: {
+    backgroundColor: '#F59E0B',
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  badgeText: {
+    color: '#000000',
+    fontSize: 8,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums']
+  },
+  actionPill: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  actionPillText: {
+    fontSize: 16,
+    fontWeight: '800'
   }
 });

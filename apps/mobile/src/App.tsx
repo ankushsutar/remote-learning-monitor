@@ -19,9 +19,11 @@ import { OnboardingWizard } from './components/OnboardingWizard';
 import { PrivacyLedgerModal } from './components/PrivacyLedgerModal';
 import { telemetryClient } from './api/telemetryClient';
 import { triggerHaptic } from './utils/haptics';
+import { LightTheme, DarkTheme, ThemeMode } from './theme/theme';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('today');
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light'); // Matches Reference UI!
   const [backendUrl, setBackendUrl] = useState(
     process.env.EXPO_PUBLIC_BACKEND_URL || 'http://10.0.0.209:4000'
   );
@@ -39,6 +41,12 @@ export default function App() {
   const [showDisclosure, setShowDisclosure] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [showPrivacyLedger, setShowPrivacyLedger] = useState(false);
+
+  const currentTheme = themeMode === 'light' ? LightTheme : DarkTheme;
+
+  const toggleTheme = () => {
+    setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   const {
     hasUsagePermission,
@@ -124,12 +132,19 @@ export default function App() {
   const totalTx = queuedRecords.reduce((acc, r) => acc + r.bytesTx, 0);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#090D16" />
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: currentTheme.bg }]}>
+      <StatusBar
+        barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'}
+        backgroundColor={currentTheme.bg}
+      />
+      <ScrollView
+        contentContainerStyle={[styles.container, { backgroundColor: currentTheme.bg }]}
+        showsVerticalScrollIndicator={false}
+      >
         {activeTab === 'today' && (
           <TodayTab
             studentName={pairedInfo ? pairedInfo.studentName : 'Student'}
+            records={queuedRecords}
             totalForegroundSec={totalForeground}
             totalRxBytes={totalRx}
             totalTxBytes={totalTx}
@@ -137,6 +152,9 @@ export default function App() {
             onSync={triggerSync}
             pendingCount={queueStats.pendingCount}
             onOpenPrivacyLedger={() => setShowPrivacyLedger(true)}
+            onNavigateToInsights={() => setActiveTab('insights')}
+            theme={currentTheme}
+            onToggleTheme={toggleTheme}
           />
         )}
 
@@ -147,6 +165,8 @@ export default function App() {
             onCollect={() => collectAndEnqueue(15)}
             totalRxBytes={totalRx}
             totalTxBytes={totalTx}
+            theme={currentTheme}
+            onNavigateBack={() => setActiveTab('today')}
           />
         )}
 
@@ -169,15 +189,18 @@ export default function App() {
             onSync={triggerSync}
             onOpenWizard={() => setShowWizard(true)}
             onOpenPrivacyLedger={() => setShowPrivacyLedger(true)}
+            theme={currentTheme}
           />
         )}
       </ScrollView>
 
-      {/* Modern Floating Bottom Tab Bar */}
+      {/* Modern Floating Bottom Tab Bar with Center Action */}
       <BottomTabBar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         pendingRecordsCount={queueStats.pendingCount}
+        theme={currentTheme}
+        onQuickAction={() => collectAndEnqueue(15)}
       />
 
       {/* Prominent Privacy & Data Disclosure Modal */}
@@ -217,8 +240,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1,
-    backgroundColor: '#090D16'
+    flex: 1
   },
   container: {
     padding: 16,

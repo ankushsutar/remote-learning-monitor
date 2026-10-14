@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { PermissionToggle } from './PermissionToggle';
 import { triggerHaptic } from '../utils/haptics';
+import { ThemeColors } from '../theme/theme';
 
 interface SettingsTabProps {
   backendUrl: string;
@@ -29,6 +30,7 @@ interface SettingsTabProps {
   onSync: () => void;
   onOpenWizard: () => void;
   onOpenPrivacyLedger: () => void;
+  theme: ThemeColors;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -48,11 +50,14 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   isSyncing,
   onSync,
   onOpenWizard,
-  onOpenPrivacyLedger
+  onOpenPrivacyLedger,
+  theme
 }) => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showDevSettings, setShowDevSettings] = useState(false);
   const [qrInputText, setQrInputText] = useState('');
+
+  const isLight = theme.mode === 'light';
 
   // Handle scanned or pasted QR payload
   const handleQrPayload = (payload: string) => {
@@ -70,10 +75,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
       }
       setShowQrModal(false);
       triggerHaptic('success');
-      // Automatically trigger pair
       setTimeout(() => onPair(), 400);
     } catch {
-      // Direct raw text enrollment code
       if (payload.trim().length > 3) {
         setStudentCode(payload.trim());
         setShowQrModal(false);
@@ -82,95 +85,179 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
     }
   };
 
+  const maxCapacity = 10000;
+  const capacityPct = Math.min(100, Math.round((pendingCount / maxCapacity) * 100));
+
   return (
     <View style={styles.container}>
-      {/* Title */}
-      <Text style={styles.sectionTitle}>Device & Security Settings</Text>
-      <Text style={styles.sectionSubtitle}>School pairing, system reliability & privacy controls</Text>
+      {/* Title Section */}
+      <View style={styles.titleSection}>
+        <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Guardian & Settings</Text>
+        <Text style={[styles.sectionSubtitle, { color: theme.textMuted }]}>
+          School enrollment, Android reliability & compliance
+        </Text>
+      </View>
 
       {/* Student Enrollment Card */}
-      <View style={styles.card}>
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+            shadowColor: theme.shadowColor
+          }
+        ]}
+      >
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardHeader}>School Enrollment</Text>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{pairedInfo ? 'CONNECTED' : 'UNPAIRED'}</Text>
+          <Text style={[styles.cardHeader, { color: theme.textPrimary }]}>School Profile</Text>
+          <View
+            style={[
+              styles.badge,
+              pairedInfo
+                ? {
+                    backgroundColor: isLight ? '#ECFDF5' : 'rgba(16, 185, 129, 0.15)',
+                    borderColor: isLight ? '#10B981' : 'rgba(16, 185, 129, 0.4)'
+                  }
+                : {
+                    backgroundColor: isLight ? '#FFFBEB' : 'rgba(245, 158, 11, 0.15)',
+                    borderColor: isLight ? '#F59E0B' : 'rgba(245, 158, 11, 0.4)'
+                  }
+            ]}
+          >
+            <View
+              style={[
+                styles.badgeDot,
+                { backgroundColor: pairedInfo ? '#10B981' : '#F59E0B' }
+              ]}
+            />
+            <Text
+              style={[
+                styles.badgeText,
+                { color: pairedInfo ? (isLight ? '#047857' : '#10B981') : (isLight ? '#B45309' : '#F59E0B') }
+              ]}
+            >
+              {pairedInfo ? 'CONNECTED' : 'UNPAIRED'}
+            </Text>
           </View>
         </View>
 
         {pairedInfo ? (
-          <View style={styles.enrolledBox}>
+          <View
+            style={[
+              styles.enrolledBox,
+              {
+                backgroundColor: isLight ? '#F8FAFC' : 'rgba(30, 41, 59, 0.55)',
+                borderColor: isLight ? '#E2E8F0' : 'rgba(99, 102, 241, 0.25)'
+              }
+            ]}
+          >
             <View style={styles.avatarRow}>
-              <View style={styles.avatarCircle}>
+              <View style={[styles.avatarCircle, { backgroundColor: isLight ? '#0D9488' : '#6366F1' }]}>
                 <Text style={styles.avatarText}>
                   {pairedInfo.studentName.charAt(0)}
                 </Text>
               </View>
               <View style={styles.enrolledDetails}>
-                <Text style={styles.enrolledName}>{pairedInfo.studentName}</Text>
-                <Text style={styles.enrolledCode}>Device ID: {pairedInfo.deviceId.slice(0, 16)}...</Text>
-                <Text style={styles.enrolledEndpoint}>Server: {backendUrl}</Text>
+                <View style={styles.nameBadgeRow}>
+                  <Text style={[styles.enrolledName, { color: theme.textPrimary }]}>{pairedInfo.studentName}</Text>
+                  <View style={[styles.verifiedTag, { backgroundColor: isLight ? '#CCFBF1' : 'rgba(16, 185, 129, 0.2)' }]}>
+                    <Text style={[styles.verifiedTagText, { color: isLight ? '#0F766E' : '#10B981' }]}>✓ VERIFIED</Text>
+                  </View>
+                </View>
+                <Text style={[styles.enrolledCode, { color: theme.textSecondary }]}>
+                  Device: {pairedInfo.deviceId.slice(0, 18)}...
+                </Text>
+                <Text style={[styles.enrolledEndpoint, { color: theme.textMuted }]} numberOfLines={1}>
+                  Server: {backendUrl}
+                </Text>
               </View>
             </View>
 
-            <View style={styles.activePill}>
+            <View style={[styles.activePill, { backgroundColor: isLight ? '#ECFDF5' : 'rgba(16, 185, 129, 0.1)', borderColor: isLight ? '#A7F3D0' : 'rgba(16, 185, 129, 0.3)' }]}>
               <View style={styles.activeDot} />
-              <Text style={styles.activeText}>Native Outbox & WorkManager Active (15m Sync)</Text>
+              <Text style={[styles.activeText, { color: isLight ? '#047857' : '#CBD5E1' }]}>
+                WorkManager 15m Sync Active
+              </Text>
             </View>
           </View>
         ) : (
           <View>
-            {/* Quick QR Scanner Action */}
             <TouchableOpacity
-              style={styles.qrScanButton}
+              style={[
+                styles.qrScanButton,
+                {
+                  backgroundColor: isLight ? '#F0FDFA' : 'rgba(99, 102, 241, 0.14)',
+                  borderColor: isLight ? '#99F6E4' : 'rgba(99, 102, 241, 0.4)'
+                }
+              ]}
               activeOpacity={0.8}
               onPress={() => {
                 triggerHaptic('medium');
                 setShowQrModal(true);
               }}
             >
-              <Text style={styles.qrScanIcon}>📷</Text>
-              <View style={styles.qrScanTextCol}>
-                <Text style={styles.qrScanTitle}>Scan School Enrollment QR Code</Text>
-                <Text style={styles.qrScanSub}>Instant pairing via teacher or parent portal</Text>
+              <View style={[styles.qrIconContainer, { backgroundColor: isLight ? '#CCFBF1' : 'rgba(99, 102, 241, 0.2)' }]}>
+                <Text style={styles.qrScanIcon}>📷</Text>
               </View>
-              <Text style={styles.qrScanArrow}>➔</Text>
+              <View style={styles.qrScanTextCol}>
+                <Text style={[styles.qrScanTitle, { color: theme.textPrimary }]}>Scan School Enrollment QR</Text>
+                <Text style={[styles.qrScanSub, { color: theme.textSecondary }]}>Instant setup via teacher or parent portal</Text>
+              </View>
+              <Text style={[styles.qrScanArrow, { color: isLight ? '#0D9488' : '#818CF8' }]}>➔</Text>
             </TouchableOpacity>
 
-            {/* Expandable Developer / Manual Server Settings Accordion */}
             <TouchableOpacity
               style={styles.accordionHeader}
-              onPress={() => setShowDevSettings(!showDevSettings)}
+              onPress={() => {
+                triggerHaptic('light');
+                setShowDevSettings(!showDevSettings);
+              }}
               activeOpacity={0.7}
             >
-              <Text style={styles.accordionTitle}>
-                {showDevSettings ? '▼ Advanced / Manual Configuration' : '▶ Advanced / Manual Configuration'}
+              <Text style={[styles.accordionTitle, { color: isLight ? '#0D9488' : '#818CF8' }]}>
+                {showDevSettings ? '▼ Manual Server Configuration' : '▶ Manual Server Configuration'}
               </Text>
             </TouchableOpacity>
 
             {showDevSettings && (
-              <View style={styles.devSettingsBody}>
-                <Text style={styles.inputLabel}>Backend Server URL</Text>
+              <View style={[styles.devSettingsBody, { borderTopColor: theme.divider }]}>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Backend Server URL</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isLight ? '#F8FAFC' : '#1E293B',
+                      borderColor: theme.cardBorder,
+                      color: theme.textPrimary
+                    }
+                  ]}
                   value={backendUrl}
                   onChangeText={setBackendUrl}
                   placeholder="http://10.0.0.209:4000"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A3B8"
                   autoCapitalize="none"
                 />
 
-                <Text style={styles.inputLabel}>Student Enrollment Code</Text>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Student Enrollment Code</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isLight ? '#F8FAFC' : '#1E293B',
+                      borderColor: theme.cardBorder,
+                      color: theme.textPrimary
+                    }
+                  ]}
                   value={studentCode}
                   onChangeText={setStudentCode}
                   placeholder="STU-94021"
-                  placeholderTextColor="#64748B"
+                  placeholderTextColor="#94A3B8"
                   autoCapitalize="characters"
                 />
 
                 <TouchableOpacity
-                  style={styles.primaryButton}
+                  style={[styles.primaryButton, { backgroundColor: isLight ? '#0D9488' : '#4F46E5' }]}
                   onPress={() => {
                     triggerHaptic('heavy');
                     onPair();
@@ -179,7 +266,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                   activeOpacity={0.8}
                 >
                   {isPairing ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <Text style={styles.buttonText}>Pair & Authorize Device</Text>
                   )}
@@ -190,54 +277,120 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         )}
       </View>
 
-      {/* System Permissions & Guided Wizard Card */}
-      <View style={styles.card}>
+      {/* System Permissions Card */}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+            shadowColor: theme.shadowColor
+          }
+        ]}
+      >
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardHeader}>System Permissions</Text>
-          <TouchableOpacity onPress={onOpenWizard} style={styles.wizardLink}>
-            <Text style={styles.wizardLinkText}>Open Guided Wizard ➔</Text>
+          <Text style={[styles.cardHeader, { color: theme.textPrimary }]}>System Permissions</Text>
+          <TouchableOpacity
+            onPress={() => {
+              triggerHaptic('light');
+              onOpenWizard();
+            }}
+            style={styles.wizardLink}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.wizardLinkText, { color: isLight ? '#0D9488' : '#818CF8' }]}>
+              Guided Setup ➔
+            </Text>
           </TouchableOpacity>
         </View>
 
         <PermissionToggle
           title="Usage Access (UsageStatsManager)"
-          description="Measures application foreground intervals for academic focus scoring."
+          description="Measures app foreground durations for academic focus scoring."
           isGranted={hasUsagePermission}
           onRequest={onRequestUsage}
+          theme={theme}
         />
 
         <PermissionToggle
           title="Battery Saver Exemption"
-          description="Prevents Android Doze mode from sleeping background sync workers."
+          description="Prevents Android Doze mode from stopping background sync workers."
           isGranted={isBatteryOptimizationIgnored}
           onRequest={onRequestBattery}
           requiredText="Exempt Needed"
+          theme={theme}
         />
 
         {!hasUsagePermission && (
           <TouchableOpacity
-            style={styles.restrictedAlert}
-            onPress={onOpenAppSettings}
+            style={[
+              styles.restrictedAlert,
+              {
+                backgroundColor: isLight ? '#FFFBEB' : 'rgba(245, 158, 11, 0.12)',
+                borderColor: isLight ? '#FCD34D' : 'rgba(245, 158, 11, 0.35)'
+              }
+            ]}
+            onPress={() => {
+              triggerHaptic('light');
+              onOpenAppSettings();
+            }}
             activeOpacity={0.7}
           >
-            <Text style={styles.restrictedText}>
-              ⚠️ On Android 13/14: If greyed out, tap here ➔ Top-right (⋮) ➔ "Allow restricted settings".
+            <Text style={[styles.restrictedText, { color: isLight ? '#92400E' : '#FCD34D' }]}>
+              ⚠️ <Text style={{ fontWeight: '800' }}>Moto / Android 14:</Text> If permission is greyed out, tap here ➔ Top-right menu (⋮) ➔ "Allow restricted settings".
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Offline Storage Diagnostics */}
-      <View style={styles.card}>
-        <Text style={styles.cardHeader}>Unified Native Storage Outbox</Text>
+      {/* Offline Storage Buffer Card */}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: theme.card,
+            borderColor: theme.cardBorder,
+            shadowColor: theme.shadowColor
+          }
+        ]}
+      >
+        <View style={styles.cardHeaderRow}>
+          <Text style={[styles.cardHeader, { color: theme.textPrimary }]}>Hardware Storage Outbox</Text>
+          <Text style={[styles.bufferCountBadge, { color: isLight ? '#0D9488' : '#818CF8' }]}>
+            {pendingCount} QUEUED
+          </Text>
+        </View>
+
+        <View style={[styles.capacityTrack, { backgroundColor: isLight ? '#F1F5F9' : '#1E293B' }]}>
+          <View
+            style={[
+              styles.capacityFill,
+              {
+                width: `${Math.max(2, capacityPct)}%`,
+                backgroundColor: isLight ? '#0D9488' : '#6366F1'
+              }
+            ]}
+          />
+        </View>
+        <Text style={[styles.capacityLabel, { color: theme.textMuted }]}>
+          Hardware SQLite storage: {pendingCount} of {maxCapacity.toLocaleString()} records
+        </Text>
+
         <View style={styles.bufferRow}>
-          <View>
-            <Text style={styles.bufferTitle}>{pendingCount} Records Buffered</Text>
-            <Text style={styles.bufferSub}>Encrypted hardware SQLite store (Max 10k)</Text>
+          <View style={styles.bufferInfoCol}>
+            <Text style={[styles.bufferSub, { color: theme.textSecondary }]}>
+              {pendingCount === 0
+                ? 'All telemetry safely synced with server'
+                : 'Records buffered offline awaiting next network cycle'}
+            </Text>
           </View>
 
           <TouchableOpacity
-            style={[styles.syncButton, pendingCount === 0 && styles.disabledButton]}
+            style={[
+              styles.syncButton,
+              { backgroundColor: isLight ? '#0D9488' : '#4F46E5' },
+              pendingCount === 0 && styles.disabledButton
+            ]}
             onPress={() => {
               triggerHaptic('light');
               onSync();
@@ -254,63 +407,107 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
         </View>
       </View>
 
-      {/* Privacy Guarantee Transparency Card */}
-      <TouchableOpacity style={styles.privacyCard} onPress={onOpenPrivacyLedger} activeOpacity={0.8}>
+      {/* Student Privacy Ledger Card */}
+      <TouchableOpacity
+        style={[
+          styles.privacyCard,
+          {
+            backgroundColor: isLight ? '#F8FAFC' : 'rgba(15, 23, 42, 0.78)',
+            borderColor: isLight ? '#E2E8F0' : 'rgba(99, 102, 241, 0.28)'
+          }
+        ]}
+        onPress={() => {
+          triggerHaptic('light');
+          onOpenPrivacyLedger();
+        }}
+        activeOpacity={0.8}
+      >
         <View style={styles.privacyHeaderRow}>
-          <Text style={styles.privacyHeader}>🛡️ Student Privacy Ledger</Text>
-          <Text style={styles.privacyBadge}>ZERO-CONTENT</Text>
+          <View style={styles.privacyTitleGroup}>
+            <Text style={styles.privacyShieldIcon}>🛡️</Text>
+            <Text style={[styles.privacyHeader, { color: theme.textPrimary }]}>Student Privacy Ledger</Text>
+          </View>
+          <View style={styles.privacyBadge}>
+            <Text style={styles.privacyBadgeText}>ZERO-CONTENT</Text>
+          </View>
         </View>
-        <Text style={styles.privacyText}>
-          Aegis operates under strict educational data compliance. Keystrokes, personal chats, microphone, and photos are never monitored. Tap to review the full privacy audit.
+        <Text style={[styles.privacyText, { color: theme.textSecondary }]}>
+          Aegis operates under strict academic privacy protocols. Keystrokes, personal chats, microphone, and photos are never collected.
         </Text>
       </TouchableOpacity>
 
-      {/* QR Code Scanner / Emulator Simulator Modal */}
+      {/* QR Scanner Modal */}
       <Modal visible={showQrModal} animationType="slide" transparent>
         <View style={styles.qrModalOverlay}>
-          <View style={styles.qrModalContent}>
+          <View
+            style={[
+              styles.qrModalContent,
+              {
+                backgroundColor: isLight ? '#FFFFFF' : '#0F172A',
+                borderColor: theme.cardBorder
+              }
+            ]}
+          >
             <View style={styles.qrModalHeader}>
-              <Text style={styles.qrModalTitle}>Scan Enrollment QR</Text>
-              <TouchableOpacity onPress={() => setShowQrModal(false)}>
+              <Text style={[styles.qrModalTitle, { color: theme.textPrimary }]}>Scan Enrollment QR</Text>
+              <TouchableOpacity
+                onPress={() => setShowQrModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Text style={styles.qrModalClose}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Visual Scanner Reticle */}
             <View style={styles.scannerReticleContainer}>
-              <View style={styles.scannerReticle}>
-                <View style={[styles.corner, styles.cornerTL]} />
-                <View style={[styles.corner, styles.cornerTR]} />
-                <View style={[styles.corner, styles.cornerBL]} />
-                <View style={[styles.corner, styles.cornerBR]} />
-                <View style={styles.scanLaser} />
-                <Text style={styles.scannerHint}>Align school QR code within frame</Text>
+              <View
+                style={[
+                  styles.scannerReticle,
+                  {
+                    backgroundColor: isLight ? '#F8FAFC' : 'rgba(15, 23, 42, 0.8)',
+                    borderColor: isLight ? '#0D9488' : 'rgba(99, 102, 241, 0.3)'
+                  }
+                ]}
+              >
+                <View style={[styles.corner, styles.cornerTL, { borderColor: isLight ? '#0D9488' : '#6366F1' }]} />
+                <View style={[styles.corner, styles.cornerTR, { borderColor: isLight ? '#0D9488' : '#6366F1' }]} />
+                <View style={[styles.corner, styles.cornerBL, { borderColor: isLight ? '#0D9488' : '#6366F1' }]} />
+                <View style={[styles.corner, styles.cornerBR, { borderColor: isLight ? '#0D9488' : '#6366F1' }]} />
+                <View style={[styles.scanLaser, { backgroundColor: isLight ? '#0D9488' : '#10B981' }]} />
+                <Text style={[styles.scannerHint, { color: theme.textMuted }]}>Align school QR code inside frame</Text>
               </View>
             </View>
 
-            {/* Quick Test / Paste Fallback */}
             <View style={styles.qrPasteSection}>
-              <Text style={styles.qrPasteLabel}>Or paste QR payload / code:</Text>
+              <Text style={[styles.qrPasteLabel, { color: theme.textSecondary }]}>Or paste student enrollment token:</Text>
               <TextInput
-                style={styles.qrInput}
+                style={[
+                  styles.qrInput,
+                  {
+                    backgroundColor: isLight ? '#F1F5F9' : '#1E293B',
+                    borderColor: theme.cardBorder,
+                    color: theme.textPrimary
+                  }
+                ]}
                 placeholder='{"server":"http://...","code":"STU-94021"}'
-                placeholderTextColor="#64748B"
+                placeholderTextColor="#94A3B8"
                 value={qrInputText}
                 onChangeText={setQrInputText}
               />
               <View style={styles.qrButtonRow}>
                 <TouchableOpacity
-                  style={styles.qrSubmitButton}
+                  style={[styles.qrSubmitButton, { backgroundColor: isLight ? '#0D9488' : '#4F46E5' }]}
                   onPress={() => handleQrPayload(qrInputText || '{"server":"http://10.0.0.209:4000","code":"STU-94021"}')}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.qrSubmitText}>Submit Payload</Text>
+                  <Text style={styles.qrSubmitText}>Authorize Code</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.qrSimulateButton}
+                  style={[styles.qrSimulateButton, { backgroundColor: isLight ? '#F1F5F9' : 'rgba(30, 41, 59, 0.8)' }]}
                   onPress={() => handleQrPayload('{"server":"http://10.0.0.209:4000","code":"STU-94021"}')}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.qrSimulateText}>Use Sample QR</Text>
+                  <Text style={[styles.qrSimulateText, { color: theme.textSecondary }]}>Use Sample QR</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -323,56 +520,63 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: 90
+    paddingBottom: 96
+  },
+  titleSection: {
+    marginBottom: 16
   },
   sectionTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: -0.5
+    fontWeight: '900',
+    letterSpacing: -0.6
   },
   sectionSubtitle: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 2,
-    marginBottom: 16
+    fontSize: 12,
+    marginTop: 2
   },
   card: {
-    backgroundColor: '#0F172A',
-    borderColor: '#1E293B',
+    borderRadius: 20,
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14
+    padding: 16,
+    marginBottom: 14,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3
   },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14
+    marginBottom: 12
   },
   cardHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC'
-  },
-  badge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
-  },
-  badgeText: {
-    color: '#818CF8',
-    fontSize: 10,
+    fontSize: 15,
     fontWeight: '800'
   },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1
+  },
+  badgeDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    marginRight: 5
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
   enrolledBox: {
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
     padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.2)'
+    borderRadius: 16,
+    borderWidth: 1
   },
   avatarRow: {
     flexDirection: 'row',
@@ -383,43 +587,51 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#6366F1',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800'
+    fontSize: 20,
+    fontWeight: '900'
   },
   enrolledDetails: {
     flex: 1
   },
+  nameBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
   enrolledName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC'
+    fontSize: 15,
+    fontWeight: '800'
+  },
+  verifiedTag: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4
+  },
+  verifiedTagText: {
+    fontSize: 8,
+    fontWeight: '800'
   },
   enrolledCode: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 1
+    fontSize: 11,
+    marginTop: 2
   },
   enrolledEndpoint: {
-    fontSize: 11,
-    color: '#64748B',
+    fontSize: 10,
     marginTop: 1
   },
   activePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8
+    paddingVertical: 6
   },
   activeDot: {
     width: 6,
@@ -429,177 +641,193 @@ const styles = StyleSheet.create({
     marginRight: 8
   },
   activeText: {
-    color: '#10B981',
     fontSize: 11,
-    fontWeight: '600'
+    fontWeight: '700'
   },
   qrScanButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
     borderWidth: 1,
-    borderColor: '#6366F1',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 12
   },
-  qrScanIcon: {
-    fontSize: 24,
+  qrIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12
+  },
+  qrScanIcon: {
+    fontSize: 20
   },
   qrScanTextCol: {
     flex: 1
   },
   qrScanTitle: {
-    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   qrScanSub: {
-    color: '#94A3B8',
     fontSize: 11,
     marginTop: 2
   },
   qrScanArrow: {
-    color: '#818CF8',
     fontSize: 16,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   accordionHeader: {
     paddingVertical: 8
   },
   accordionTitle: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  devSettingsBody: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#1E293B'
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginBottom: 6,
-    marginTop: 10
-  },
-  input: {
-    backgroundColor: '#020617',
-    borderColor: '#334155',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: '#F8FAFC',
-    fontSize: 14
-  },
-  primaryButton: {
-    backgroundColor: '#4F46E5',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 16
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14
-  },
-  wizardLink: {
-    paddingVertical: 4
-  },
-  wizardLinkText: {
-    color: '#818CF8',
     fontSize: 12,
     fontWeight: '700'
   },
-  restrictedAlert: {
-    marginTop: 12,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+  devSettingsBody: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+    marginTop: 8
+  },
+  input: {
     borderWidth: 1,
     borderRadius: 10,
-    padding: 12
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13
+  },
+  primaryButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 14
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800'
+  },
+  wizardLink: {
+    paddingVertical: 2
+  },
+  wizardLinkText: {
+    fontSize: 12,
+    fontWeight: '800'
+  },
+  restrictedAlert: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10
   },
   restrictedText: {
-    color: '#F59E0B',
-    fontSize: 11,
-    lineHeight: 16
+    fontSize: 12,
+    lineHeight: 17
+  },
+  bufferCountBadge: {
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  capacityTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 6
+  },
+  capacityFill: {
+    height: '100%',
+    borderRadius: 2
+  },
+  capacityLabel: {
+    fontSize: 10,
+    marginBottom: 12
   },
   bufferRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'space-between'
   },
-  bufferTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#F8FAFC'
+  bufferInfoCol: {
+    flex: 1,
+    marginRight: 12
   },
   bufferSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2
+    fontSize: 12
   },
   syncButton: {
-    backgroundColor: '#2563EB',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8
+    paddingVertical: 9,
+    borderRadius: 10
   },
   disabledButton: {
     opacity: 0.5
   },
   syncButtonText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600'
+    fontWeight: '800',
+    fontSize: 12
   },
   privacyCard: {
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    borderColor: '#1E293B',
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14
   },
   privacyHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6
+    marginBottom: 8
+  },
+  privacyTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  privacyShieldIcon: {
+    fontSize: 16
   },
   privacyHeader: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#E2E8F0'
+    fontSize: 14,
+    fontWeight: '800'
   },
   privacyBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4
+  },
+  privacyBadgeText: {
     color: '#10B981',
     fontSize: 9,
     fontWeight: '800'
   },
   privacyText: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 16
+    fontSize: 12,
+    lineHeight: 18
   },
   qrModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
-    alignItems: 'center',
     padding: 20
   },
   qrModalContent: {
-    width: '100%',
-    backgroundColor: '#0E131F',
-    borderRadius: 20,
-    padding: 20,
     borderWidth: 1,
-    borderColor: '#1E2538'
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10
   },
   qrModalHeader: {
     flexDirection: 'row',
@@ -608,67 +836,85 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   qrModalTitle: {
-    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   qrModalClose: {
-    color: '#9CA3AF',
     fontSize: 18,
-    fontWeight: '700'
+    color: '#94A3B8',
+    padding: 4
   },
   scannerReticleContainer: {
     alignItems: 'center',
-    marginVertical: 12
+    marginVertical: 14
   },
   scannerReticle: {
     width: 200,
     height: 200,
-    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    position: 'relative',
+    borderRadius: 16,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'center'
+    position: 'relative'
   },
   corner: {
     position: 'absolute',
-    width: 24,
-    height: 24,
-    borderColor: '#6366F1'
+    width: 20,
+    height: 20
   },
-  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
-  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 },
-  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
+  cornerTL: {
+    top: -1,
+    left: -1,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 8
+  },
+  cornerTR: {
+    top: -1,
+    right: -1,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 8
+  },
+  cornerBL: {
+    bottom: -1,
+    left: -1,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 8
+  },
+  cornerBR: {
+    bottom: -1,
+    right: -1,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 8
+  },
   scanLaser: {
-    width: '80%',
-    height: 2,
-    backgroundColor: '#818CF8',
-    marginBottom: 16
+    position: 'absolute',
+    width: '90%',
+    height: 2
   },
   scannerHint: {
-    color: '#9CA3AF',
-    fontSize: 11
+    fontSize: 11,
+    marginTop: 60,
+    fontWeight: '600'
   },
   qrPasteSection: {
-    marginTop: 12
+    marginTop: 8
   },
   qrPasteLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 6
+    fontSize: 11,
+    marginBottom: 6,
+    fontWeight: '600'
   },
   qrInput: {
-    backgroundColor: '#020617',
     borderWidth: 1,
-    borderColor: '#1E2538',
-    borderRadius: 8,
-    padding: 10,
-    color: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     fontSize: 12,
-    marginBottom: 10
+    marginBottom: 12
   },
   qrButtonRow: {
     flexDirection: 'row',
@@ -676,26 +922,23 @@ const styles = StyleSheet.create({
   },
   qrSubmitButton: {
     flex: 1,
-    backgroundColor: '#4F46E5',
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center'
   },
   qrSubmitText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   qrSimulateButton: {
-    backgroundColor: '#1E2538',
-    paddingHorizontal: 12,
+    flex: 1,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center'
   },
   qrSimulateText: {
-    color: '#CBD5E1',
     fontSize: 12,
-    fontWeight: '600'
+    fontWeight: '700'
   }
 });
